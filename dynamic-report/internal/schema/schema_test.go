@@ -2,7 +2,7 @@ package schema
 
 import (
 	"encoding/json"
-	"strings"
+	"reflect"
 	"testing"
 
 	"dynamic-report/internal/datahub"
@@ -255,12 +255,16 @@ func TestBuildSchemaConditionalFormatsAndPrint(t *testing.T) {
 			topCF = cf
 		}
 	}
-	if dataBar == nil || len(dataBar.Ranges) != 1 || !strings.HasPrefix(dataBar.Ranges[0], "C2:") {
+	if dataBar == nil || len(dataBar.Ranges) != 1 || dataBar.Ranges[0] != "C2:C11" {
 		t.Fatalf("data bar = %+v", dataBar)
 	}
-	// per_group top_n 按 3 个叶子组（上海/杭州/北京）展开为 3 条区间。
-	if topCF == nil || len(topCF.Ranges) != 3 {
-		t.Fatalf("top_n ranges = %+v, want 3", topCF)
+	if dataBar.Stats == nil || dataBar.Stats.Min != 100 || dataBar.Stats.Max != 1000 {
+		t.Fatalf("data bar stats = %+v, want {100,1000}", dataBar.Stats)
+	}
+	// per_group top_n 按 3 个叶子组展开，区间收束到组内最后一条明细行（不含小计行）。
+	want := []string{"C2:C3", "C5:C5", "C8:C8"}
+	if topCF == nil || !reflect.DeepEqual(topCF.Ranges, want) {
+		t.Fatalf("top_n ranges = %v, want %v", topCF.Ranges, want)
 	}
 }
 
@@ -277,5 +281,37 @@ func TestBuildSchemaOverrideInRuleHits(t *testing.T) {
 	gs.Finish()
 	engine.PositionPass(def, gs.Layout)
 	engine.AssemblyPass(def, gs.Layout)
-	_ = def
+	// 手工构造 override 伪规则（等价 pipeline.CompileOverrides 对 ov_ew 的产物），
+	// 避免 schema→pipeline 依赖。
+	doc := &style.RulesDoc{Rules: []style.Rule{
+		{
+			ID:       "override:ov_ew",
+			Priority: 1000,
+			When: style.Cond{All: []style.Cond{
+				{Ctx: "group_path", Op: "prefix", Values: []any{"华东"}},
+				{Ctx: "row_type", Op: "eq", Value: "subtotal"},
+			}},
+			Style: style.StyleSpec{Fill: &style.FillSpec{Color: "#FFF7E6"}, Bold: true},
+		},
+	}}
+	s, err := Build(def, gs.Layout, style.NewEngine(doc), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 华东小计行：布局 R5（上海subtotal R2、杭州subtotal R4 之后）→ s.Rows[6]（物理7）。
+	// 断言其 amount 指标列（Cells[2]）RuleHits 含 override:ov_ew。
+	row := s.Rows[6]
+	if row.Type != "subtotal" || row.GroupPath[0] != "华东" {
+		t.Fatalf("expected 华东 subtotal at s.Rows[6], got %+v", row)
+	}
+	hits := row.Cells[2].RuleHits
+	found := false
+	for _, h := range hits {
+		if h == "override:ov_ew" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("rule_hits = %v, want override:ov_ew", hits)
+	}
 }

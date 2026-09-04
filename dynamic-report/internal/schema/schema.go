@@ -193,12 +193,10 @@ func Build(def *model.ReportDefinition, l *engine.Layout, se *style.Engine, trac
 					return nil, err
 				}
 			} else {
-				var hits []string
-				st, hits, err = se.Resolve(ctx)
+				st, _, err = se.Resolve(ctx)
 				if err != nil {
 					return nil, err
 				}
-				_ = hits
 			}
 			if st.RowHeight > 0 && rowHeight == 0 {
 				rowHeight = st.RowHeight
@@ -227,14 +225,6 @@ func Build(def *model.ReportDefinition, l *engine.Layout, se *style.Engine, trac
 	s.PageSetup = buildPageSetup(def)
 	s.ConditionalFormats = buildConditionalFormats(def, l, ndim)
 	return s, nil
-}
-
-// onlyIf 在 trace 模式下返回命中规则，否则返回 nil。
-func onlyIf(trace bool, hits []string) []string {
-	if trace {
-		return hits
-	}
-	return nil
 }
 
 // ruleHitsFrom 在 trace 模式下从解释列表提取命中规则 ID，非 trace 时返回 nil。
@@ -289,9 +279,13 @@ const cfGroupLimit = 200
 // buildConditionalFormats 把定义中的条件格式展开为渲染层 DTO：
 //   - 按 metric 定位目标列，生成 Excel 区间（物理行号，1-based）；
 //   - per_group 时按叶子维度组逐组生成区间（行扫描 FirstOfDepth/LastOfDepth，
+//     区间收束到组内最后一条明细行（不含小计行），避免 top_n 被小计和值污染；
 //     覆盖单行组，因为合并区间只覆盖 ≥2 行的组）；
 //   - data_bar/color_scale 附带区间数值统计。
 func buildConditionalFormats(def *model.ReportDefinition, l *engine.Layout, ndim int) []CFInfo {
+	if len(l.Rows) == 0 {
+		return nil
+	}
 	var out []CFInfo
 	for _, cf := range def.ConditionalFormats {
 		colIdx := -1
@@ -310,6 +304,7 @@ func buildConditionalFormats(def *model.ReportDefinition, l *engine.Layout, ndim
 		var bands []groupBand
 		if cf.Scope.PerGroup {
 			// 按行扫描叶子维度组边界（FirstOfDepth/LastOfDepth），
+			// 区间收束到组内最后一条明细行（不含小计行），避免 top_n 被小计和值污染；
 			// 覆盖单行组（合并区间只覆盖 ≥2 行组，会漏掉单行组）。
 			leaf := ndim - 1
 			if leaf >= 0 {
@@ -319,7 +314,7 @@ func buildConditionalFormats(def *model.ReportDefinition, l *engine.Layout, ndim
 						start = i
 					}
 					if start >= 0 && len(r.LastOfDepth) > leaf && r.LastOfDepth[leaf] {
-						bands = append(bands, groupBand{start, i})
+						bands = append(bands, groupBand{start, i - 1})
 						start = -1
 					}
 				}
@@ -333,24 +328,30 @@ func buildConditionalFormats(def *model.ReportDefinition, l *engine.Layout, ndim
 		} else {
 			bands = []groupBand{{0, len(l.Rows) - 1}}
 		}
-		minV, maxV := math.Inf(1), math.Inf(-1)
 		for _, b := range bands {
 			info.Ranges = append(info.Ranges, fmt.Sprintf("%s%d:%s%d", colLetter, b.from+2, colLetter, b.to+2))
-			for i := b.from; i <= b.to; i++ {
-				if i < len(l.Rows) && i < len(l.Rows[i].Cells) {
-					if f, ok := toFloat(l.Rows[i].Cells[colIdx].Value); ok {
-						if f < minV {
-							minV = f
-						}
-						if f > maxV {
-							maxV = f
+		}
+		if cf.Kind == "data_bar" || cf.Kind == "color_scale" {
+			minV, maxV := math.Inf(1), math.Inf(-1)
+			found := false
+			for _, b := range bands {
+				for i := b.from; i <= b.to; i++ {
+					if i < len(l.Rows) && colIdx < len(l.Rows[i].Cells) {
+						if f, ok := toFloat(l.Rows[i].Cells[colIdx].Value); ok {
+							found = true
+							if f < minV {
+								minV = f
+							}
+							if f > maxV {
+								maxV = f
+							}
 						}
 					}
 				}
 			}
-		}
-		if cf.Kind == "data_bar" || cf.Kind == "color_scale" {
-			info.Stats = &CFStats{Min: minV, Max: maxV}
+			if found {
+				info.Stats = &CFStats{Min: minV, Max: maxV}
+			}
 		}
 		out = append(out, info)
 	}
