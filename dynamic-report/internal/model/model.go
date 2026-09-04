@@ -92,7 +92,7 @@ func Load(path string) (*ReportDefinition, error) {
 	}
 	var def ReportDefinition
 	if err := json.Unmarshal(b, &def); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse definition %s: %w", path, err)
 	}
 	if err := def.Validate(); err != nil {
 		return nil, err
