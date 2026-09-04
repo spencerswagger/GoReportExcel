@@ -1,9 +1,8 @@
 {
   "name": "web",
   "version": "1.0.0",
-  "description": "",
+  "private": true,
   "type": "module",
-  "main": "index.js",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -11,9 +10,6 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
