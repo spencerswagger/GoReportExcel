@@ -9,19 +9,24 @@ import (
 // feeding detail rows. It keeps one groupState per open dimension level plus
 // a root aggregator for the grand total.
 type GroupStack struct {
-	def    *model.ReportDefinition
-	Layout *Layout
-	stack  []*groupState
-	root   []*Aggregator
-	seq    int
+	def             *model.ReportDefinition
+	Layout          *Layout
+	stack           []*groupState
+	root            []*Aggregator
+	seq             int
+	rootDetailCount int
+	rootSamples     []int
 }
 
 // groupState tracks one open group at a dimension depth.
 type groupState struct {
-	depth    int
-	key      string
-	startIdx int
-	aggs     []*Aggregator
+	depth            int
+	key              string
+	startIdx         int
+	aggs             []*Aggregator
+	firstDetailRowNo int
+	detailCount      int
+	detailSamples    []int // 抽样不超过 5 条 RowNo
 }
 
 // NewGroupStack creates an empty GroupStack for the given definition.
@@ -72,16 +77,31 @@ func (g *GroupStack) Feed(r DetailRow) {
 	}
 	g.seq++
 
-	g.detailRow(r)
+	for _, gs := range g.stack {
+		gs.detailCount++
+		if len(gs.detailSamples) < 5 {
+			gs.detailSamples = append(gs.detailSamples, r.RowNo)
+		}
+	}
+	if len(g.root) > 0 {
+		g.rootDetailCount++
+		if len(g.rootSamples) < 5 {
+			g.rootSamples = append(g.rootSamples, r.RowNo)
+		}
+	}
+
+	row := g.detailRow(r)
+	row.Cells = g.attachDetailTrace(row.Cells, r.RowNo)
+	row.SeqInGroup = g.seq
+	g.Layout.Rows = append(g.Layout.Rows, row)
 }
 
-// detailRow appends one detail row and folds its metrics into all open groups
+// detailRow builds one detail row and folds its metrics into all open groups
 // and the root. Groups are opened before this call so their aggregators exist.
-func (g *GroupStack) detailRow(r DetailRow) {
+func (g *GroupStack) detailRow(r DetailRow) *LayoutRow {
 	row := &LayoutRow{
-		Type:       style.RowDetail,
-		GroupPath:  append([]string(nil), r.Keys...),
-		SeqInGroup: g.seq,
+		Type:      style.RowDetail,
+		GroupPath: append([]string(nil), r.Keys...),
 	}
 	for d := range g.def.Dimensions {
 		row.Cells = append(row.Cells, LayoutCell{
@@ -101,7 +121,15 @@ func (g *GroupStack) detailRow(r DetailRow) {
 		}
 		g.root[mi].Update(r.Values[m.Field])
 	}
-	g.Layout.Rows = append(g.Layout.Rows, row)
+	return row
+}
+
+// attachDetailTrace 为明细行的维度列附 Trace（指标列在 buildSubtotal 时处理）。
+func (g *GroupStack) attachDetailTrace(cells []LayoutCell, rowNo int) []LayoutCell {
+	for i := range cells {
+		cells[i].Trace = &CellTrace{SourceCount: 1, SampleRows: []int{rowNo}}
+	}
+	return cells
 }
 
 // closeTop closes the innermost open group and appends its subtotal row.
@@ -141,6 +169,10 @@ func (g *GroupStack) closeTop() {
 			MetricIdx: mi,
 			SubRange:  SubRange{FromIdx: gs.startIdx, ToIdx: lastIdx},
 			HasRange:  true,
+			Trace: &CellTrace{
+				SourceCount: gs.detailCount,
+				SampleRows:  append([]int(nil), gs.detailSamples...),
+			},
 		})
 	}
 	g.Layout.Rows = append(g.Layout.Rows, row)
@@ -171,6 +203,7 @@ func (g *GroupStack) Finish() {
 			MetricIdx: mi,
 			SubRange:  SubRange{FromIdx: 0, ToIdx: lastIdx},
 			HasRange:  true,
+			Trace:     &CellTrace{SourceCount: g.rootDetailCount, SampleRows: append([]int(nil), g.rootSamples...)},
 		})
 	}
 
