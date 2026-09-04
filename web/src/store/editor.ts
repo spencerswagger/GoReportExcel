@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { create } from 'zustand';
 import type { RenderSchema } from '../api/types';
 
 export type SaveState = 'clean' | 'dirty' | 'saving' | 'conflict';
@@ -38,20 +38,7 @@ interface EditorState {
   setSaveState(s: SaveState): void;
 }
 
-// 状态对象在 action 中原位更新，保证 getState() 始终返回同一引用，
-// 使外部（含测试）持有的引用始终反映最新状态；通过 emit() 通知 React 订阅者重渲染。
-const listeners = new Set<() => void>();
-function emit() {
-  listeners.forEach((l) => l());
-}
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
-}
-
-const state: EditorState = {
+export const useEditorStore = create<EditorState>((set, get) => ({
   defId: '',
   baseVersion: 0,
   draft: null,
@@ -62,77 +49,43 @@ const state: EditorState = {
   undoStack: [],
   redoStack: [],
 
-  reset: (defId, baseVersion) => {
-    Object.assign(state, {
-      defId, baseVersion, draft: null, saveState: 'clean',
-      render: null, rowTotal: 0, selectedCell: null, undoStack: [], redoStack: [],
-    });
-    emit();
-  },
+  reset: (defId, baseVersion) =>
+    set({ defId, baseVersion, draft: null, saveState: 'clean', render: null, rowTotal: 0, selectedCell: null, undoStack: [], redoStack: [] }),
 
-  setDraft: (draft, baseVersion) => {
-    Object.assign(state, { draft, baseVersion, saveState: 'clean' });
-    emit();
-  },
+  setDraft: (draft, baseVersion) => set({ draft, baseVersion, saveState: 'clean' }),
 
-  setRender: (schema, rowTotal) => {
-    Object.assign(state, { render: schema, rowTotal });
-    emit();
-  },
+  setRender: (schema, rowTotal) => set({ render: schema, rowTotal }),
 
-  selectCell: (cellId) => {
-    Object.assign(state, { selectedCell: cellId });
-    emit();
-  },
+  selectCell: (cellId) => set({ selectedCell: cellId }),
 
   checkpoint: (label) => {
-    const { draft, baseVersion, undoStack } = state;
+    const { draft, baseVersion, undoStack } = get();
     undoStack.push({ label, draft: draft ? JSON.parse(JSON.stringify(draft)) : null, baseVersion });
-    Object.assign(state, { undoStack, redoStack: [] });
-    emit();
+    set({ undoStack, redoStack: [] });
   },
 
   mutateDraft: (fn) => {
-    const draft = state.draft ?? { id: state.defId, version: state.baseVersion, name: '' };
-    fn(draft);
-    Object.assign(state, { draft: { ...draft }, saveState: 'dirty' });
-    emit();
+    const { draft, defId, baseVersion } = get();
+    const d = draft ?? { id: defId, version: baseVersion, name: '' };
+    fn(d);
+    set({ draft: { ...d }, saveState: 'dirty' });
   },
 
   undo: () => {
-    const cp = state.undoStack.pop();
+    const { undoStack, redoStack, draft, baseVersion } = get();
+    const cp = undoStack.pop();
     if (!cp) return;
-    state.redoStack.push({
-      label: 'redo',
-      draft: state.draft ? JSON.parse(JSON.stringify(state.draft)) : null,
-      baseVersion: state.baseVersion,
-    });
-    Object.assign(state, { draft: cp.draft, baseVersion: cp.baseVersion, saveState: 'dirty' });
-    emit();
+    redoStack.push({ label: 'redo', draft: draft ? JSON.parse(JSON.stringify(draft)) : null, baseVersion });
+    set({ draft: cp.draft, baseVersion: cp.baseVersion, undoStack, redoStack, saveState: 'dirty' });
   },
 
   redo: () => {
-    const cp = state.redoStack.pop();
+    const { undoStack, redoStack } = get();
+    const cp = redoStack.pop();
     if (!cp) return;
-    state.undoStack.push(cp);
-    Object.assign(state, { draft: cp.draft, baseVersion: cp.baseVersion, saveState: 'dirty' });
-    emit();
+    undoStack.push(cp);
+    set({ draft: cp.draft, baseVersion: cp.baseVersion, undoStack, redoStack, saveState: 'dirty' });
   },
 
-  setSaveState: (saveState) => {
-    Object.assign(state, { saveState });
-    emit();
-  },
-};
-
-type Selector<T> = (s: EditorState) => T;
-
-function useEditorStore<T>(selector: Selector<T>): T {
-  return useSyncExternalStore(subscribe, () => selector(state), () => selector(state));
-}
-
-useEditorStore.getState = () => state;
-useEditorStore.subscribe = subscribe;
-useEditorStore.getInitialState = () => state;
-
-export { useEditorStore };
+  setSaveState: (saveState) => set({ saveState }),
+}));

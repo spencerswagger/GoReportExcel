@@ -19,23 +19,24 @@ describe('editor store', () => {
   });
 
   it('setRender caches schema and clears selection', () => {
-    const s = fresh();
-    s.setRender(schema, 10);
-    expect(s.render).toBe(schema);
-    expect(s.rowTotal).toBe(10);
+    fresh();
+    useEditorStore.getState().setRender(schema, 10);
+    const after = useEditorStore.getState();
+    expect(after.render).toBe(schema);
+    expect(after.rowTotal).toBe(10);
   });
 
   it('selectCell records cell id', () => {
-    const s = fresh();
-    s.selectCell('r3c2');
-    expect(s.selectedCell).toBe('r3c2');
+    fresh();
+    useEditorStore.getState().selectCell('r3c2');
+    expect(useEditorStore.getState().selectedCell).toBe('r3c2');
   });
 
   it('marks dirty on edit and undo restores checkpoint', () => {
     const s = fresh();
     s.checkpoint('change title');
     s.mutateDraft((d) => { (d as { name?: string }).name = '新标题'; });
-    expect(s.saveState).toBe('dirty');
+    expect(useEditorStore.getState().saveState).toBe('dirty');
     s.undo();
     const after = useEditorStore.getState();
     expect(after.draft && 'name' in after.draft ? after.draft.name : undefined).not.toBe('新标题');
