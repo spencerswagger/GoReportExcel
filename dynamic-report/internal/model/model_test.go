@@ -147,6 +147,25 @@ func TestValidateRejectsOverrideUnknownMetric(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsOverrideMetricAndDimTogether(t *testing.T) {
+	var def ReportDefinition
+	if err := json.Unmarshal(mustRead(t, "testdata/valid.json"), &def); err != nil {
+		t.Fatalf("unmarshal fixture: %v", err)
+	}
+	def.Overrides = []OverrideDef{{
+		ID:         "ov3",
+		Scope:      OverrideScope{Metric: "amount", Dim: "region"},
+		StylePatch: StylePatchJSON{Bold: true},
+	}}
+	err := def.Validate()
+	if err == nil {
+		t.Fatal("Validate() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Errorf("error = %q, want it to contain %q", err.Error(), "mutually exclusive")
+	}
+}
+
 func TestValidateRejectsCFUnknownKind(t *testing.T) {
 	var def ReportDefinition
 	if err := json.Unmarshal(mustRead(t, "testdata/valid.json"), &def); err != nil {

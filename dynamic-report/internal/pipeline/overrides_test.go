@@ -96,11 +96,30 @@ func TestEngineResolveWithOverride(t *testing.T) {
 
 func TestCompileOverridesBadPatch(t *testing.T) {
 	def := ovDef()
-	def.Overrides[0].StylePatch.Fill.Color = "not-a-color" // model 校验不查颜色，编译层应通过；不改此断言
 	raw := `[{"id":"bad","scope":{},"style_patch":{"border":{"top":{"style":"ultra"}}}}]`
 	def.Overrides = nil
 	_ = json.Unmarshal([]byte(raw), &def.Overrides)
 	if _, err := CompileOverrides(def); err == nil {
 		t.Fatal("expected invalid border style error")
+	}
+}
+
+func TestCompileOverridesEmptyScopeSkipped(t *testing.T) {
+	def := ovDef()
+	// An override with no scope anchors must be skipped, not crash the build.
+	def.Overrides = append(def.Overrides, model.OverrideDef{
+		ID:         "ov_empty",
+		Scope:      model.OverrideScope{},
+		StylePatch: model.StylePatchJSON{Bold: true},
+	})
+	rules, err := CompileOverrides(def)
+	if err != nil {
+		t.Fatalf("CompileOverrides with empty scope: %v", err)
+	}
+	if len(rules) != 1 {
+		t.Fatalf("rules = %d, want 1 (empty-scope override skipped)", len(rules))
+	}
+	if rules[0].ID != "override:ov_highlight" {
+		t.Fatalf("rule id = %q", rules[0].ID)
 	}
 }

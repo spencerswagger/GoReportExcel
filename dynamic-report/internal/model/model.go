@@ -208,6 +208,9 @@ func (d *ReportDefinition) Validate() error {
 		if !validRowTypes[ov.Scope.RowType] {
 			return fmt.Errorf("override %q: invalid row_type %q", ov.ID, ov.Scope.RowType)
 		}
+		if ov.Scope.Metric != "" && ov.Scope.Dim != "" {
+			return fmt.Errorf("override %q: metric and dim are mutually exclusive", ov.ID)
+		}
 		if ov.Scope.Metric != "" {
 			if _, ok := fields[ov.Scope.Metric]; !ok {
 				return fmt.Errorf("override %q: metric %q not found in dataset", ov.ID, ov.Scope.Metric)

@@ -40,9 +40,16 @@ func CompileOverrides(def *model.ReportDefinition) ([]style.Rule, error) {
 				style.Cond{Ctx: "dim_key", Op: "eq", Value: ov.Scope.Dim},
 			)
 		}
+		// Validate the style patch first so an invalid patch is always
+		// reported, even for an override that will be skipped below.
 		spec, err := stylePatchToSpec(ov.StylePatch)
 		if err != nil {
 			return nil, fmt.Errorf("override %q: %w", ov.ID, err)
+		}
+		// An override with no scope anchors matches nothing meaningful; skipping
+		// it keeps an empty-scope override from crashing the whole build.
+		if len(conds) == 0 {
+			continue
 		}
 		out = append(out, style.Rule{
 			ID:       "override:" + ov.ID,
