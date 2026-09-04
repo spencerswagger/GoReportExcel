@@ -2,6 +2,7 @@ package schema
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"dynamic-report/internal/datahub"
@@ -170,4 +171,111 @@ func TestFormatDisplay(t *testing.T) {
 	if got := FormatDisplay(nil, "#,##0"); got != "" {
 		t.Fatalf("got %q", got)
 	}
+}
+
+func TestBuildSchemaExplains(t *testing.T) {
+	def, err := model.Load("../model/testdata/overrides_test.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, _ := datahub.NewCSVSource("../datahub/testdata/sales.csv").Rows(def)
+	gs := engine.NewGroupStack(def)
+	for _, r := range rows {
+		gs.Feed(r)
+	}
+	gs.Finish()
+	engine.PositionPass(def, gs.Layout)
+	engine.AssemblyPass(def, gs.Layout)
+	doc, err := style.ParseRules(def.StyleRules)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := Build(def, gs.Layout, style.NewEngine(doc), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// zebra 命中的明细行（物理 3=布局 1，上海第 2 条）应带 Explains
+	row := s.Rows[2]
+	if len(row.Cells[2].Explains) == 0 {
+		t.Fatalf("row3 explains = %v", row.Cells[2].Explains)
+	}
+	if row.Cells[2].Explains[0].Reason == "" {
+		t.Fatal("empty reason")
+	}
+}
+
+func TestPageRows(t *testing.T) {
+	def, l := buildSample(t)
+	s, err := Build(def, l, style.NewEngine(&style.RulesDoc{}), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PageRows(0, 4); err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Rows) != 5 {
+		t.Fatalf("paged rows = %d", len(s.Rows))
+	}
+	if s.Rows[0].Idx != 1 || s.Rows[1].Idx != 2 {
+		t.Fatalf("header must stay first: %+v", s.Rows[0])
+	}
+}
+
+func TestBuildSchemaConditionalFormatsAndPrint(t *testing.T) {
+	def, err := model.Load("../model/testdata/overrides_test.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, _ := datahub.NewCSVSource("../datahub/testdata/sales.csv").Rows(def)
+	gs := engine.NewGroupStack(def)
+	for _, r := range rows {
+		gs.Feed(r)
+	}
+	gs.Finish()
+	engine.PositionPass(def, gs.Layout)
+	engine.AssemblyPass(def, gs.Layout)
+	s, err := Build(def, gs.Layout, style.NewEngine(&style.RulesDoc{}), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.PageSetup == nil || s.PageSetup.Orientation != "landscape" || s.PageSetup.RepeatHeaderRows != 1 || s.PageSetup.FitToWidth != 1 {
+		t.Fatalf("page setup = %+v", s.PageSetup)
+	}
+	if len(s.ConditionalFormats) == 0 {
+		t.Fatal("no conditional formats")
+	}
+	var dataBar *CFInfo
+	var topCF *CFInfo
+	for i := range s.ConditionalFormats {
+		cf := &s.ConditionalFormats[i]
+		if cf.Kind == "data_bar" {
+			dataBar = cf
+		}
+		if cf.Kind == "top_n" {
+			topCF = cf
+		}
+	}
+	if dataBar == nil || len(dataBar.Ranges) != 1 || !strings.HasPrefix(dataBar.Ranges[0], "C2:") {
+		t.Fatalf("data bar = %+v", dataBar)
+	}
+	// per_group top_n 按 3 个叶子组（上海/杭州/北京）展开为 3 条区间。
+	if topCF == nil || len(topCF.Ranges) != 3 {
+		t.Fatalf("top_n ranges = %+v, want 3", topCF)
+	}
+}
+
+func TestBuildSchemaOverrideInRuleHits(t *testing.T) {
+	def, err := model.Load("../model/testdata/overrides_test.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, _ := datahub.NewCSVSource("../datahub/testdata/sales.csv").Rows(def)
+	gs := engine.NewGroupStack(def)
+	for _, r := range rows {
+		gs.Feed(r)
+	}
+	gs.Finish()
+	engine.PositionPass(def, gs.Layout)
+	engine.AssemblyPass(def, gs.Layout)
+	_ = def
 }
