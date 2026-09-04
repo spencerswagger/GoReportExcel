@@ -264,4 +264,20 @@ func TestRenderConditionalFormatsAndPrint(t *testing.T) {
 	if !printTitles {
 		t.Fatal("print titles defined name missing")
 	}
+	// top_n 的 Rank 应为 DSL 声明的 N（3），而非 N-1（回归 M1 离一错误）。
+	cfMap, err := f.GetConditionalFormats("Sheet1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var topRank string
+	for _, opts := range cfMap {
+		for _, o := range opts {
+			if o.Type == "top" {
+				topRank = o.Value
+			}
+		}
+	}
+	if topRank != "3" {
+		t.Fatalf("top_n rank = %q, want 3", topRank)
+	}
 }

@@ -212,7 +212,7 @@ func toExcelStyle(def *model.ReportDefinition, st style.ResolvedStyle, isHeader 
 	return es, nil
 }
 
-// applyConditionalFormats 注入条件格式；同 kind+rangeRef 合并一次
+// applyConditionalFormats 注入条件格式；同 rangeRef 合并一次
 // SetConditionalFormat（spike V1：同一 rangeRef 重复调用会整体覆盖旧规则，
 // 必须合并进一次调用的 opts 数组）。
 func applyConditionalFormats(f *excelize.File, sheet string, cfs []schema.CFInfo) error {
@@ -226,6 +226,19 @@ func applyConditionalFormats(f *excelize.File, sheet string, cfs []schema.CFInfo
 		byRange[rng] = append(byRange[rng], opt)
 	}
 	for _, cf := range cfs {
+		// cf 级样式预创建：top_n 的 dxf 样式按 cf 只建一次，避免 per_group
+		// 每个区间重复 NewConditionalStyle（最多 200 区间会建 200 个 dxf）。
+		var topStyle *int
+		if cf.Kind == "top_n" && cf.Style.Fill != nil {
+			st, err := f.NewConditionalStyle(&excelize.Style{
+				Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{cf.Style.Fill.Color}},
+				Font: &excelize.Font{Bold: cf.Style.Bold},
+			})
+			if err != nil {
+				return err
+			}
+			topStyle = &st
+		}
 		for _, rng := range cf.Ranges {
 			var opt excelize.ConditionalFormatOptions
 			switch cf.Kind {
@@ -247,16 +260,11 @@ func applyConditionalFormats(f *excelize.File, sheet string, cfs []schema.CFInfo
 					MinColor: cf.Color, MaxColor: cf.Color,
 				}
 			case "top_n":
-				opt = excelize.ConditionalFormatOptions{Type: "top", Criteria: ">", Value: fmt.Sprint(cf.N - 1)}
-				if cf.Style.Fill != nil {
-					st, err := f.NewConditionalStyle(&excelize.Style{
-						Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{cf.Style.Fill.Color}},
-						Font: &excelize.Font{Bold: cf.Style.Bold},
-					})
-					if err != nil {
-						return err
-					}
-					opt.Format = &st
+				// Value 直接作为 Rank（excelize drawCondFmtTop10 对 Value 做
+				// strconv.Atoi 赋给 c.Rank），必须用 cf.N 而非 cf.N-1（M1）。
+				opt = excelize.ConditionalFormatOptions{Type: "top", Criteria: ">", Value: fmt.Sprint(cf.N)}
+				if topStyle != nil {
+					opt.Format = topStyle
 				}
 			default:
 				continue
@@ -286,7 +294,7 @@ func applyPageSetup(f *excelize.File, sheet string, ps *schema.PageSetupInfo) er
 	}
 	if ps.FitToWidth > 0 {
 		if err := f.SetPageLayout(sheet, &excelize.PageLayoutOptions{
-			Orientation: &orient, FitToWidth: &ps.FitToWidth,
+			Orientation: &orient, FitToWidth: &ps.FitToWidth, FitToHeight: intPtr(0),
 		}); err != nil {
 			return err
 		}
@@ -305,3 +313,6 @@ func applyPageSetup(f *excelize.File, sheet string, ps *schema.PageSetupInfo) er
 	}
 	return nil
 }
+
+// intPtr 返回 int 的指针，供 PageLayoutOptions 等指针字段使用。
+func intPtr(v int) *int { return &v }
