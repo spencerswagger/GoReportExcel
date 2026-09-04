@@ -25,6 +25,7 @@ module declares its path as: github.com/xuri/excelize/v2
 - 计划中的 `Type:"top10"` 不存在，对应类型为 `Type:"top"`（`Criteria:"=", Value:"2"`）。`Format` 字段是 `*int`，需 `f.NewConditionalStyle(&excelize.Style{...})` 生成样式 ID。
 - **关键发现（影响渲染装配遍）**：对同一 `rangeRef` 连续多次调用 `SetConditionalFormat`，后一次调用会**整体覆盖**前一次（实测 A1:A5 先写 data_bar 再写 top，回读只剩 top）。同范围多条规则必须**合并进一次调用的 opts 数组**，实测一次调用传 2 个规则后，内存回读与重开文件回读均为 2 条规则。
 - 结论/影响：渲染器为每个 sheet 维护 `rangeRef -> []rules` 的映射，按范围一次性批量调用 SetConditionalFormat；不允许同范围多次调用。
+- 人工验证：同一 rangeRef 重复调用 SetConditionalFormat 会整体覆盖前次规则，与合并一次调用共存 2 条规则的内存回读结论一致（已人工复现）。
 
 ## V2. 公式缓存值：v2.9.0 支持双写（先写值、后写公式）
 
@@ -39,10 +40,11 @@ module declares its path as: github.com/xuri/excelize/v2
 - 计划形态 `SetDefinedName(&excelize.DefinedName{Name:"_xlnm.Print_Titles", RefersTo:"Sheet1!$1:$1"})` **不报错**，但回读 `Scope="Workbook"`（默认工作簿级）。
 - v2.9.0 文档对"行重复顶部"的标准写法要求带 `Scope:"Sheet1"`；实测带 Scope 后回读 `Name="_xlnm.Print_Titles" RefersTo="Sheet1!$1:$1" Scope="Sheet1"`。
 - 结论/影响：渲染"每页重复表头行"时按 `SetDefinedName(&excelize.DefinedName{Name:"_xlnm.Print_Titles", RefersTo: sheet+"!$1:$1", Scope: sheet})` 写入；列重复可类推 `RefersTo: sheet+"!$A:$A"`。
+- 幂等提示：实现时只写一次带 Scope 的 `_xlnm.Print_Titles`（避免复用无 Scope 形态产生两条重复记录）；工具在新旧形态混合写入时会残留重复项。（基于实测：无 Scope 写入会残留下一条记录）
 
 ## V4. 写入性能：1 万行级无压力（远低于 10s 上限）
 
-- 实测：10000 行 x 6 列逐格 `SetCellValue`（60000 次调用）+ `Write` 到 bytes.Buffer 共约 **0.13s~0.15s**（SetCellValue 阶段约 47~49ms），无任何超时。
+- 实测：10000 行 x 6 列逐格 `SetCellValue`（60000 次调用）+ `Write` 到 bytes.Buffer 共约 **0.13s~0.15s**（SetCellValue 阶段约 47~49ms），无任何超时。口径澄清：49ms 为 SetCellValue 阶段耗时，`f.Write` 另计（共约 0.13s）。
 - 输出文件字节数：**375,723 字节**（约 367 KB）。
 - 结论/影响：逐格 SetCellValue 对当前报表规模完全够用，渲染层无需 StreamWriter 优化；若后续单表超数十万行，可再评估 `SetSheetRow`/`StreamWriter`。
 

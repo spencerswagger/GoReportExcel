@@ -33,8 +33,14 @@ func TestSpikeFormulaCachedValue(t *testing.T) {
 	if err != nil || formula != "=A1+A2" {
 		t.Fatalf("formula = %q, err = %v", formula, err)
 	}
-	v, _ := g.GetCellValue("Sheet1", "A3")
-	t.Logf("cached value readback = %q (空字符串说明回读不到缓存值)", v)
+	v, err := g.GetCellValue("Sheet1", "A3")
+	if err != nil {
+		t.Fatalf("读取 A3 缓存值失败: %v", err)
+	}
+	if v != "30" {
+		t.Fatalf("cached value readback = %q (空字符串说明回读不到缓存值)", v)
+	}
+	t.Logf("cached value readback = %q (先值后公式双写成功)", v)
 }
 
 // V1 验证：条件格式（数据条 / Top-N）。
