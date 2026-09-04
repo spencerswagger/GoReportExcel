@@ -91,6 +91,13 @@ func (s *Store) GetPublished(id string) (*DefMeta, error) {
 	return rowToMeta(row)
 }
 
+// GetVersion 返回指定已发布版本；无则 (nil, nil)。
+func (s *Store) GetVersion(id string, v int) (*DefMeta, error) {
+	row := s.db.QueryRow(`SELECT id,version,status,payload,updated_by,updated_at FROM definitions
+		WHERE id=? AND version=? AND status='published'`, id, v)
+	return rowToMeta(row)
+}
+
 // SaveDraft upserts a draft payload, rejecting drafts whose base version is
 // older than the currently stored draft.
 func (s *Store) SaveDraft(id, payload, by string) error {

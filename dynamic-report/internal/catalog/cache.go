@@ -27,6 +27,9 @@ func NewCache(store *Store) *Cache {
 	return &Cache{store: store, items: map[string]*cachedDef{}, subs: map[int]func(string){}}
 }
 
+// Store 返回底层存储（供直接读写定义版本链）。
+func (c *Cache) Store() *Store { return c.store }
+
 func (c *Cache) SetTTL(d time.Duration) { c.ttl = d }
 
 // Subscribe 注册 id 变更通知；返回的取消函数移除订阅。
@@ -69,7 +72,7 @@ func (c *Cache) GetPublished(ctx context.Context, id string) (*model.ReportDefin
 	item, ok := c.items[id]
 	c.mu.RUnlock()
 	if ok {
-		def, err := unmarshalDef(item.payload)
+		def, err := UnmarshalDef(item.payload)
 		return def, item.version, err
 	}
 	meta, err := c.store.GetPublished(id)
@@ -85,7 +88,7 @@ func (c *Cache) GetPublished(ctx context.Context, id string) (*model.ReportDefin
 		c.items[id] = &cachedDef{version: meta.Version, payload: meta.Payload}
 	}
 	c.mu.Unlock()
-	def, err := unmarshalDef(meta.Payload)
+	def, err := UnmarshalDef(meta.Payload)
 	return def, meta.Version, err
 }
 
@@ -122,7 +125,8 @@ func (c *Cache) refreshOne(id string) {
 	c.mu.Unlock()
 }
 
-func unmarshalDef(payload string) (*model.ReportDefinition, error) {
+// UnmarshalDef 把存储的 payload JSON 解析为报告定义。
+func UnmarshalDef(payload string) (*model.ReportDefinition, error) {
 	var def model.ReportDefinition
 	if err := json.Unmarshal([]byte(payload), &def); err != nil {
 		return nil, err
