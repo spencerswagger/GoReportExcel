@@ -41,7 +41,7 @@ func TestAssemblyPassFillsFormulas(t *testing.T) {
 		t.Fatalf("华东小计 qty formula = %q", hd.Formula)
 	}
 	total := l.Rows[4].Cells[2]
-	if total.Formula != "=SUBTOTAL(9,C2:C6)" {
+	if total.Formula != "=SUBTOTAL(9,C2:C5)" {
 		t.Fatalf("总计 amount formula = %q", total.Formula)
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"dynamic-report/internal/model"
-	"dynamic-report/internal/style"
 )
 
 // subtotalFnCodes 映射聚合函数到 Excel SUBTOTAL 函数码。
@@ -35,11 +34,12 @@ func ColumnName(n int) string {
 }
 
 // AssemblyPass（P3 装配遍）：把布局下标区间换算为物理行号并生成公式。
-// 物理行 = 布局下标 + 2（第 1 行是表头）。总计置顶的行位移已在
-// GroupStack.Finish 中通过区间 +1 补偿，此处无需特殊处理。
+// 物理行 = 布局下标 + 2（第 1 行是表头）。小计与总计统一使用 SubRange 区间，
+// 公式终点引用到 lastIdx（最后一条明细/小计行），天然不含总计行自身；
+// 总计列位移已在 GroupStack.Finish 中通过区间 +1 补偿。
 func AssemblyPass(def *model.ReportDefinition, l *Layout) {
 	ndim := len(def.Dimensions)
-	for i, row := range l.Rows {
+	for _, row := range l.Rows {
 		for ci := range row.Cells {
 			cell := &row.Cells[ci]
 			if !cell.HasRange {
@@ -48,10 +48,6 @@ func AssemblyPass(def *model.ReportDefinition, l *Layout) {
 			m := def.Metrics[cell.MetricIdx]
 			col := ColumnName(ndim + cell.MetricIdx + 1)
 			to := cell.SubRange.ToIdx + 2
-			if row.Type == style.RowTotal {
-				// 总计行的公式区间终点指向总计行自身（物理行 = 布局下标 + 2）。
-				to = i + 2
-			}
 			cell.Formula = SubtotalFormula(m.Agg, col, cell.SubRange.FromIdx+2, to)
 		}
 	}
