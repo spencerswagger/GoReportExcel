@@ -148,7 +148,7 @@
     {
       "id": "outer-thick-inner-thin",
       "priority": 100,
-      "when": {"all": [{"ctx": "row_type", "in": ["detail", "subtotal"]}]},
+      "when": {"all": [{"ctx": "row_type", "op": "in", "values": ["detail", "subtotal"]}]},
       "style": {
         "border": {
           "top":    {"at": "group_first_row", "style": "medium", "else": "hair"},
@@ -162,22 +162,22 @@
       "id": "zebra-in-group",
       "priority": 50,
       "when": {"all": [
-        {"ctx": "row_type", "eq": "detail"},
-        {"ctx": "seq_in_group", "mod": 2, "eq": 0}
+        {"ctx": "row_type", "op": "eq", "value": "detail"},
+        {"ctx": "seq_in_group", "mod": 2, "op": "eq", "value": 0}
       ]},
       "style": {"fill": {"color": "#F5F7FA"}}
     },
     {
       "id": "subtotal-emphasis",
       "priority": 120,
-      "when": {"ctx": "row_type", "eq": "subtotal"},
+      "when": {"ctx": "row_type", "op": "eq", "value": "subtotal"},
       "style": {"fill": {"color": "#E8EEF7"}, "bold": true, "row_height": 22}
     },
     {
       "id": "negative-red",
       "priority": 200,
       "when": {"all": [
-        {"ctx": "col_role", "eq": "metric"},
+        {"ctx": "col_role", "op": "eq", "value": "metric"},
         {"ctx": "value", "op": "lt", "value": 0}
       ]},
       "style": {"font_color": "#C0392B"}
@@ -186,7 +186,7 @@
       "id": "depth-indent",
       "priority": 30,
       "when": {"all": [
-        {"ctx": "col_role", "eq": "dimension"},
+        {"ctx": "col_role", "op": "eq", "value": "dimension"},
         {"ctx": "dim_depth", "op": "gte", "value": 1}
       ]},
       "style": {"indent": {"expr": "dim_depth"}}
