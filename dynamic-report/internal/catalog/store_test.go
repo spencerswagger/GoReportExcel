@@ -152,20 +152,28 @@ func TestStoreRollback(t *testing.T) {
 		t.Fatalf("SaveDraft v3: %v", err)
 	}
 	if err := s.Publish("r1", "b"); err != nil {
-		t.Fatalf("Publish v3: %v", err)
+		t.Fatalf("Publish v4: %v", err)
+	}
+	// Global max+1: the draft is v3, so the new published version is 4.
+	pub, err := s.GetPublished("r1")
+	if err != nil {
+		t.Fatalf("GetPublished after publish: %v", err)
+	}
+	if pub == nil || pub.Version != 4 {
+		t.Errorf("published Version = %+v, want 4", pub)
 	}
 	if err := s.Rollback("r1", 2, "c"); err != nil {
 		t.Fatalf("Rollback to 2: %v", err)
 	}
-	pub, err := s.GetPublished("r1")
+	pub, err = s.GetPublished("r1")
 	if err != nil {
 		t.Fatalf("GetPublished: %v", err)
 	}
 	if pub == nil {
 		t.Fatal("GetPublished returned nil")
 	}
-	if pub.Version != 4 {
-		t.Errorf("Version = %d, want 4", pub.Version)
+	if pub.Version != 5 {
+		t.Errorf("Version = %d, want 5", pub.Version)
 	}
 	var def struct {
 		Version int `json:"version"`
@@ -173,8 +181,8 @@ func TestStoreRollback(t *testing.T) {
 	if err := json.Unmarshal([]byte(pub.Payload), &def); err != nil {
 		t.Fatalf("unmarshal payload: %v", err)
 	}
-	if def.Version != 4 {
-		t.Errorf("payload version = %d, want 4", def.Version)
+	if def.Version != 5 {
+		t.Errorf("payload version = %d, want 5", def.Version)
 	}
 }
 

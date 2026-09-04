@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"time"
 )
 
@@ -139,10 +138,10 @@ func (s *Store) Publish(id, by string) error {
 	}
 	defer tx.Rollback()
 
-	// The next published version is one above the newest published version;
-	// when nothing has been published yet it is one above the draft's version.
+	// The next version is one above the highest version ever used for this
+	// definition (across both drafts and published versions).
 	var maxV int
-	if err := tx.QueryRow(`SELECT COALESCE(MAX(version), ?) FROM definitions WHERE id = ? AND status = 'published'`, draft.Version, id).Scan(&maxV); err != nil {
+	if err := tx.QueryRow(`SELECT COALESCE(MAX(version), 0) FROM definitions WHERE id = ?`, id).Scan(&maxV); err != nil {
 		return err
 	}
 	newV := maxV + 1
@@ -286,9 +285,4 @@ func digestOf(v any) string {
 		return fmt.Sprint(v)
 	}
 	return string(b)
-}
-
-// sortVersions sorts version metadata by ascending version number.
-func sortVersions(vs []VersionInfo) {
-	sort.Slice(vs, func(i, j int) bool { return vs[i].Version < vs[j].Version })
 }
