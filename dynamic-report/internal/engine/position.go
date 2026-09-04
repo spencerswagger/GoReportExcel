@@ -7,20 +7,43 @@ import (
 	"dynamic-report/internal/style"
 )
 
-// GroupFirstRow/GroupLastRow 提供行级便捷标志：
-// 有维度时取最内层深度；0 维度时退化为表级首/末行语义。
+// GroupFirstRow/GroupLastRow 提供行级便捷标志，按行类型区分组边界语义：
+//   - subtotal 行：该行属于 Level 深度的组，边界取 FirstOfDepth/LastOfDepth[Level]；
+//   - total 行：不属于任何组，边界退化为表级首/末行（top 置顶时为表首，bottom 置底时为表末）；
+//   - detail 行：取最内层深度；
+//   - 0 维度（深度数组为空）：一律退化为表级首/末行。
 func (r *LayoutRow) GroupFirstRow() bool {
-	if len(r.FirstOfDepth) == 0 {
+	switch r.Type {
+	case style.RowSubtotal:
+		if len(r.FirstOfDepth) == 0 {
+			return r.sheetFirst
+		}
+		return r.FirstOfDepth[r.Level]
+	case style.RowTotal:
 		return r.sheetFirst
+	default: // RowDetail
+		if len(r.FirstOfDepth) == 0 {
+			return r.sheetFirst
+		}
+		return r.FirstOfDepth[len(r.FirstOfDepth)-1]
 	}
-	return r.FirstOfDepth[len(r.FirstOfDepth)-1]
 }
 
 func (r *LayoutRow) GroupLastRow() bool {
-	if len(r.LastOfDepth) == 0 {
+	switch r.Type {
+	case style.RowSubtotal:
+		if len(r.LastOfDepth) == 0 {
+			return r.sheetLast
+		}
+		return r.LastOfDepth[r.Level]
+	case style.RowTotal:
 		return r.sheetLast
+	default: // RowDetail
+		if len(r.LastOfDepth) == 0 {
+			return r.sheetLast
+		}
+		return r.LastOfDepth[len(r.LastOfDepth)-1]
 	}
-	return r.LastOfDepth[len(r.LastOfDepth)-1]
 }
 
 // PositionPass（P1 位置遍）：
@@ -36,11 +59,11 @@ func PositionPass(def *model.ReportDefinition, l *Layout) {
 			r.LastOfDepth = make([]bool, ndim)
 		}
 	}
-	if ndim == 0 {
-		for i, r := range l.Rows {
-			r.sheetFirst = i == 0
-			r.sheetLast = i == n-1
-		}
+	// 表级首/末行标志：total 行不属于任何组，0 维度场景没有组，
+	// 这两类行级边界均退化为该标志，故对所有维度统一填充。
+	for i, r := range l.Rows {
+		r.sheetFirst = i == 0
+		r.sheetLast = i == n-1
 	}
 
 	type span struct {

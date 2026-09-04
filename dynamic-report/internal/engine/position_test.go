@@ -3,6 +3,8 @@ package engine
 import (
 	"reflect"
 	"testing"
+
+	"dynamic-report/internal/style"
 )
 
 func buildSampleLayout(t *testing.T) *GroupStack {
@@ -105,5 +107,73 @@ func TestPositionPassZeroDimFlags(t *testing.T) {
 	}
 	if !l.Rows[last].GroupLastRow() {
 		t.Fatalf("rows[last].GroupLastRow() = false, want true")
+	}
+}
+
+func TestGroupBoundaryByRowType(t *testing.T) {
+	gs := buildSampleLayout(t)
+	l := gs.Layout
+	PositionPass(twoDimDef(), l)
+	// 行序（10 行，layout 下标）:
+	//  0上海明细 1上海明细 2上海小计 3杭州明细 4杭州小计
+	//  5华东小计 6北京明细 7北京小计 8华北小计 9总计
+
+	cases := []struct {
+		idx       int
+		name      string
+		wantFirst bool
+		wantLast  bool
+	}{
+		{2, "上海小计(Level=1)", false, true},
+		{4, "杭州小计(Level=1)", false, true},
+		{5, "华东小计(Level=0)", false, true},
+		{7, "北京小计(Level=1)", false, true},
+		{8, "华北小计(Level=0)", false, true},
+		{9, "总计(bottom)", false, true},
+		{0, "上海明细1", true, false},
+		{1, "上海明细2", false, false},
+		{3, "杭州明细", true, false},
+		{6, "北京明细(单条明细组)", true, false},
+	}
+	for _, c := range cases {
+		r := l.Rows[c.idx]
+		if got := r.GroupFirstRow(); got != c.wantFirst {
+			t.Errorf("rows[%d] %s: GroupFirstRow() = %v, want %v", c.idx, c.name, got, c.wantFirst)
+		}
+		if got := r.GroupLastRow(); got != c.wantLast {
+			t.Errorf("rows[%d] %s: GroupLastRow() = %v, want %v", c.idx, c.name, got, c.wantLast)
+		}
+	}
+}
+
+func TestGroupBoundaryTotalTop(t *testing.T) {
+	def := twoDimDef()
+	def.LayoutOpts.TotalPosition = "top"
+	gs := NewGroupStack(def)
+	rows(gs,
+		DetailRow{Keys: []string{"华东", "上海"}, Values: map[string]any{"amount": 100.0, "qty": 1}},
+	)
+	l := gs.Layout
+	PositionPass(def, l)
+	// 单条数据两维布局 + 置顶总计: 0总计 1明细 2上海小计 3华东小计，共 4 行
+	if len(l.Rows) != 4 {
+		t.Fatalf("rows = %d, want 4", len(l.Rows))
+	}
+	if r := l.Rows[0]; r.Type != style.RowTotal {
+		t.Fatalf("rows[0].Type = %v, want total", r.Type)
+	}
+	if r := l.Rows[0]; !r.GroupFirstRow() || r.GroupLastRow() {
+		t.Fatalf("total(top): GroupFirstRow/GroupLastRow = %v/%v, want true/false",
+			r.GroupFirstRow(), r.GroupLastRow())
+	}
+	if r := l.Rows[1]; !r.GroupFirstRow() || r.GroupLastRow() {
+		t.Fatalf("rows[1] 上海明细: GroupFirstRow/GroupLastRow = %v/%v, want true/false",
+			r.GroupFirstRow(), r.GroupLastRow())
+	}
+	if r := l.Rows[2]; !r.GroupLastRow() {
+		t.Fatalf("rows[2] 上海小计(Level=1): GroupLastRow() = false, want true")
+	}
+	if r := l.Rows[3]; !r.GroupLastRow() {
+		t.Fatalf("rows[3] 华东小计(Level=0): GroupLastRow() = false, want true")
 	}
 }

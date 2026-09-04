@@ -36,8 +36,8 @@ type LayoutRow struct {
 	Height       float64
 	FirstOfDepth []bool
 	LastOfDepth  []bool
-	sheetFirst   bool // 0 维度时行级首行标志
-	sheetLast    bool // 0 维度时行级末行标志
+	sheetFirst   bool // 表级首行标志（0 维度与 total 行退化用）
+	sheetLast    bool // 表级末行标志（0 维度与 total 行退化用）
 }
 
 // MergeRange describes a to-be-merged span of rows at one dimension depth.
