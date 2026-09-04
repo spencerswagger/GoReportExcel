@@ -2,6 +2,7 @@ package schema
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -37,15 +38,53 @@ type MergeInfo struct {
 	C  int `json:"c"`
 }
 
+// PageSetupInfo 描述打印/导出时的页面设置。
+type PageSetupInfo struct {
+	Orientation      string `json:"orientation,omitempty"`
+	FitToWidth       int    `json:"fit_to_width,omitempty"`
+	RepeatHeaderRows int    `json:"repeat_header_rows,omitempty"`
+}
+
+// CFInfo 描述一条已展开的条件格式（含目标单元格区间与统计信息）。
+type CFInfo struct {
+	ID     string               `json:"id"`
+	Kind   string               `json:"kind"`
+	Color  string               `json:"color,omitempty"`
+	N      int                  `json:"n,omitempty"`
+	Style  model.StylePatchJSON `json:"style,omitempty"`
+	Ranges []string             `json:"ranges"`
+	Stats  *CFStats             `json:"stats,omitempty"`
+}
+
+// CFStats 描述条件格式覆盖区间的数值统计（data_bar/color_scale 用）。
+type CFStats struct {
+	Min float64 `json:"min"`
+	Max float64 `json:"max"`
+}
+
+// ExplainDTO 描述一条命中样式规则及其自然语言原因。
+type ExplainDTO struct {
+	ID     string `json:"id"`
+	Reason string `json:"reason"`
+}
+
+// CellTraceDTO 描述单元格的数据血缘（来源条数与抽样行号）。
+type CellTraceDTO struct {
+	SourceCount int   `json:"source_count"`
+	SampleRows  []int `json:"sample_rows,omitempty"`
+}
+
 // CellDTO 是渲染层的一个单元格。
 type CellDTO struct {
-	Col      int      `json:"col"`
-	CellID   string   `json:"cell_id"`
-	Value    any      `json:"value"`
-	Display  string   `json:"display"`
-	Formula  string   `json:"formula,omitempty"`
-	Style    string   `json:"style"`
-	RuleHits []string `json:"rule_hits,omitempty"`
+	Col      int           `json:"col"`
+	CellID   string        `json:"cell_id"`
+	Value    any           `json:"value"`
+	Display  string        `json:"display"`
+	Formula  string        `json:"formula,omitempty"`
+	Style    string        `json:"style"`
+	RuleHits []string      `json:"rule_hits,omitempty"`
+	Explains []ExplainDTO  `json:"explains,omitempty"`
+	Trace    *CellTraceDTO `json:"trace,omitempty"`
 }
 
 // RowDTO 是渲染层的一行。
@@ -60,12 +99,14 @@ type RowDTO struct {
 
 // RenderSchema 是把引擎布局转换为渲染器可直接消费的中间表示。
 type RenderSchema struct {
-	SchemaVersion int                            `json:"schema_version"`
-	Report        ReportInfo                     `json:"report"`
-	Cols          []ColInfo                      `json:"cols"`
-	Styles        map[string]style.ResolvedStyle `json:"styles"`
-	Merges        []MergeInfo                    `json:"merges"`
-	Rows          []RowDTO                       `json:"rows"`
+	SchemaVersion      int                            `json:"schema_version"`
+	Report             ReportInfo                     `json:"report"`
+	Cols               []ColInfo                      `json:"cols"`
+	Styles             map[string]style.ResolvedStyle `json:"styles"`
+	Merges             []MergeInfo                    `json:"merges"`
+	Rows               []RowDTO                       `json:"rows"`
+	PageSetup          *PageSetupInfo                 `json:"page_setup,omitempty"`
+	ConditionalFormats []CFInfo                       `json:"conditional_formats,omitempty"`
 }
 
 // Build 从物化布局构建 RenderSchema。
@@ -143,9 +184,19 @@ func Build(def *model.ReportDefinition, l *engine.Layout, se *style.Engine, trac
 		for c := 0; c < ncols && c < len(row.Cells); c++ {
 			cell := row.Cells[c]
 			ctx := buildCtx(def, row, physRow, c, lastBodyIdx)
-			st, hits, err := se.Resolve(ctx)
-			if err != nil {
-				return nil, err
+			var st style.ResolvedStyle
+			var explains []ExplainDTO
+			var err error
+			if trace {
+				st, explains, err = tracedResolve(se, &ctx)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				st, _, err = se.Resolve(ctx)
+				if err != nil {
+					return nil, err
+				}
 			}
 			if st.RowHeight > 0 && rowHeight == 0 {
 				rowHeight = st.RowHeight
@@ -161,7 +212,9 @@ func Build(def *model.ReportDefinition, l *engine.Layout, se *style.Engine, trac
 				Display:  FormatDisplay(cell.Value, numFmt),
 				Formula:  cell.Formula,
 				Style:    intern(st),
-				RuleHits: onlyIf(trace, hits),
+				RuleHits: ruleHitsFrom(trace, explains),
+				Explains: explains,
+				Trace:    toTraceDTO(cell.Trace),
 			})
 		}
 		if rowHeight > 0 {
@@ -169,14 +222,150 @@ func Build(def *model.ReportDefinition, l *engine.Layout, se *style.Engine, trac
 		}
 		s.Rows = append(s.Rows, dto)
 	}
+	s.PageSetup = buildPageSetup(def)
+	s.ConditionalFormats = buildConditionalFormats(def, l, ndim)
 	return s, nil
 }
 
-// onlyIf 在 trace 模式下返回命中规则，否则返回 nil。
-func onlyIf(trace bool, hits []string) []string {
-	if trace {
-		return hits
+// ruleHitsFrom 在 trace 模式下从解释列表提取命中规则 ID，非 trace 时返回 nil。
+// 保持前端契约：RuleHits 仅在预览模式输出。
+func ruleHitsFrom(trace bool, explains []ExplainDTO) []string {
+	if !trace {
+		return nil
 	}
+	out := make([]string, 0, len(explains))
+	for _, x := range explains {
+		out = append(out, x.ID)
+	}
+	return out
+}
+
+// tracedResolve 调用引擎的带解释求值，并把 RuleExplain 转换为 DTO。
+func tracedResolve(e *style.Engine, ctx *style.CellContext) (style.ResolvedStyle, []ExplainDTO, error) {
+	st, ex, err := e.ResolveTraced(ctx)
+	if err != nil {
+		return st, nil, err
+	}
+	out := make([]ExplainDTO, 0, len(ex))
+	for _, x := range ex {
+		out = append(out, ExplainDTO{ID: x.ID, Reason: x.Reason})
+	}
+	return st, out, nil
+}
+
+// toTraceDTO 把引擎血缘信息转换为 DTO；无血缘时返回 nil。
+func toTraceDTO(t *engine.CellTrace) *CellTraceDTO {
+	if t == nil {
+		return nil
+	}
+	return &CellTraceDTO{SourceCount: t.SourceCount, SampleRows: t.SampleRows}
+}
+
+// buildPageSetup 从定义提取打印页面设置；未配置时返回 nil。
+func buildPageSetup(def *model.ReportDefinition) *PageSetupInfo {
+	if def.LayoutOpts.Print == nil {
+		return nil
+	}
+	return &PageSetupInfo{
+		Orientation:      def.LayoutOpts.Print.Orientation,
+		FitToWidth:       def.LayoutOpts.Print.FitToWidth,
+		RepeatHeaderRows: def.LayoutOpts.Print.RepeatHeaderRows,
+	}
+}
+
+// cfGroupLimit 是 per_group 条件格式允许的最大分组数；超过则退化为整表单区间。
+const cfGroupLimit = 200
+
+// buildConditionalFormats 把定义中的条件格式展开为渲染层 DTO：
+//   - 按 metric 定位目标列，生成 Excel 区间（物理行号，1-based）；
+//   - per_group 时按叶子维度组逐组生成区间（行扫描 FirstOfDepth/LastOfDepth，
+//     区间收束到组内最后一条明细行（不含小计行），避免 top_n 被小计和值污染；
+//     覆盖单行组，因为合并区间只覆盖 ≥2 行的组）；
+//   - data_bar/color_scale 附带区间数值统计。
+func buildConditionalFormats(def *model.ReportDefinition, l *engine.Layout, ndim int) []CFInfo {
+	if len(l.Rows) == 0 {
+		return nil
+	}
+	var out []CFInfo
+	for _, cf := range def.ConditionalFormats {
+		colIdx := -1
+		for mi, m := range def.Metrics {
+			if m.Field == cf.Scope.Metric {
+				colIdx = ndim + mi
+			}
+		}
+		if colIdx < 0 {
+			continue
+		}
+		colLetter := engine.ColumnName(colIdx + 1)
+		info := CFInfo{ID: cf.ID, Kind: cf.Kind, Color: cf.Color, N: cf.N, Style: cf.Style}
+
+		type groupBand struct{ from, to int }
+		var bands []groupBand
+		if cf.Scope.PerGroup {
+			// 按行扫描叶子维度组边界（FirstOfDepth/LastOfDepth），
+			// 区间收束到组内最后一条明细行（不含小计行），避免 top_n 被小计和值污染；
+			// 覆盖单行组（合并区间只覆盖 ≥2 行组，会漏掉单行组）。
+			leaf := ndim - 1
+			if leaf >= 0 {
+				start := -1
+				for i, r := range l.Rows {
+					if r.Type == style.RowDetail && len(r.FirstOfDepth) > leaf && r.FirstOfDepth[leaf] {
+						start = i
+					}
+					if start >= 0 && len(r.LastOfDepth) > leaf && r.LastOfDepth[leaf] {
+						bands = append(bands, groupBand{start, i - 1})
+						start = -1
+					}
+				}
+			}
+			if len(bands) == 0 {
+				bands = append(bands, groupBand{0, len(l.Rows) - 1})
+			}
+			if len(bands) > cfGroupLimit {
+				bands = []groupBand{{0, len(l.Rows) - 1}}
+			}
+		} else {
+			bands = []groupBand{{0, len(l.Rows) - 1}}
+		}
+		for _, b := range bands {
+			info.Ranges = append(info.Ranges, fmt.Sprintf("%s%d:%s%d", colLetter, b.from+2, colLetter, b.to+2))
+		}
+		if cf.Kind == "data_bar" || cf.Kind == "color_scale" {
+			minV, maxV := math.Inf(1), math.Inf(-1)
+			found := false
+			for _, b := range bands {
+				for i := b.from; i <= b.to; i++ {
+					if i < len(l.Rows) && colIdx < len(l.Rows[i].Cells) {
+						if f, ok := toFloat(l.Rows[i].Cells[colIdx].Value); ok {
+							found = true
+							if f < minV {
+								minV = f
+							}
+							if f > maxV {
+								maxV = f
+							}
+						}
+					}
+				}
+			}
+			if found {
+				info.Stats = &CFStats{Min: minV, Max: maxV}
+			}
+		}
+		out = append(out, info)
+	}
+	return out
+}
+
+// PageRows 按行窗口切片（窗口按"数据行序号"计，header 恒保留在首位）。
+// [from,to) 是数据行（即 Rows[1:]）的下标区间。
+func (s *RenderSchema) PageRows(from, to int) error {
+	if from < 0 || to < from || to > len(s.Rows)-1 {
+		return fmt.Errorf("invalid row window [%d,%d), rows=%d", from, to, len(s.Rows)-1)
+	}
+	body := s.Rows[1:]
+	s.Rows = append([]RowDTO{s.Rows[0]}, body[from:to]...)
 	return nil
 }
 

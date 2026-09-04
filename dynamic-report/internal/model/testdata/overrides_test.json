@@ -1,0 +1,45 @@
+{
+  "id": "rpt_sales", "version": 2, "name": "销售报表",
+  "dataset": {
+    "source_ref": "csv_local",
+    "fields": [
+      {"key": "region", "type": "string", "sort_key": "region_order"},
+      {"key": "city", "type": "string"},
+      {"key": "amount", "type": "number"},
+      {"key": "qty", "type": "number"}
+    ]
+  },
+  "dimensions": [
+    {"field": "region", "label": "大区", "sort": {"by": "sort_key", "dir": "asc"}},
+    {"field": "city", "label": "城市", "sort": {"by": "value", "dir": "asc"}}
+  ],
+  "metrics": [
+    {"field": "amount", "label": "销售额", "agg": "SUM", "num_fmt_ref": "money"},
+    {"field": "qty", "label": "件数", "agg": "COUNT", "num_fmt_ref": "int"}
+  ],
+  "layout_opts": {
+    "total_position": "bottom",
+    "print": {"orientation": "landscape", "fit_to_width": 1, "repeat_header_rows": 1}
+  },
+  "base_styles": {
+    "header_font": {"name": "Arial", "size": 11, "bold": true},
+    "body_font": {"name": "Arial", "size": 10},
+    "num_formats": {"money": "#,##0.00", "int": "#,##0"}
+  },
+  "style_rules": {"version": 1, "rules": [
+    {"id": "zebra", "priority": 50,
+     "when": {"all": [
+       {"ctx": "row_type", "op": "eq", "value": "detail"},
+       {"ctx": "seq_in_group", "mod": 2, "op": "eq", "value": 0}]},
+     "style": {"fill": {"color": "#F5F7FA"}}}
+  ]},
+  "overrides": [
+    {"id": "ov_ew", "scope": {"group_path_prefix": ["华东"], "row_type": "subtotal"},
+     "style_patch": {"fill": {"color": "#FFF7E6"}, "bold": true}}
+  ],
+  "conditional_formats": [
+    {"id": "cf_amount", "scope": {"metric": "amount"}, "kind": "data_bar", "color": "#638EC6"},
+    {"id": "cf_top", "scope": {"metric": "amount", "per_group": true}, "kind": "top_n", "n": 3,
+     "style": {"fill": {"color": "#FDEBD0"}, "bold": true}}
+  ]
+}

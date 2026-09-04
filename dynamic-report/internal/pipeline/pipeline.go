@@ -44,5 +44,10 @@ func build(def *model.ReportDefinition, src datahub.Source, trace bool) (*schema
 	if err != nil {
 		return nil, err
 	}
-	return schema.Build(def, gs.Layout, style.NewEngine(doc), trace)
+	ovRules, err := CompileOverrides(def)
+	if err != nil {
+		return nil, err
+	}
+	allRules := append(doc.Rules, ovRules...)
+	return schema.Build(def, gs.Layout, style.NewEngine(&style.RulesDoc{Rules: allRules}), trace)
 }

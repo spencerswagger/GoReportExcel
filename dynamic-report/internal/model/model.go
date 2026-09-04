@@ -54,7 +54,46 @@ type Dataset struct {
 
 // LayoutOpts carries layout-level report options.
 type LayoutOpts struct {
-	TotalPosition string `json:"total_position,omitempty"`
+	TotalPosition string     `json:"total_position,omitempty"`
+	Print         *PrintOpts `json:"print,omitempty"`
+}
+
+// PrintOpts carries print/export options of the rendered report.
+type PrintOpts struct {
+	Orientation      string `json:"orientation,omitempty"`
+	FitToWidth       int    `json:"fit_to_width,omitempty"`
+	RepeatHeaderRows int    `json:"repeat_header_rows,omitempty"`
+}
+
+// OverrideScope narrows the rows an override applies to.
+type OverrideScope struct {
+	GroupPathPrefix []string `json:"group_path_prefix,omitempty"`
+	RowType         string   `json:"row_type,omitempty"`
+	Metric          string   `json:"metric,omitempty"`
+	Dim             string   `json:"dim,omitempty"`
+}
+
+// OverrideDef applies a style patch to the rows matching Scope.
+type OverrideDef struct {
+	ID         string         `json:"id"`
+	Scope      OverrideScope  `json:"scope"`
+	StylePatch StylePatchJSON `json:"style_patch"`
+}
+
+// CFScope narrows the cells a conditional format applies to.
+type CFScope struct {
+	Metric   string `json:"metric,omitempty"`
+	PerGroup bool   `json:"per_group,omitempty"`
+}
+
+// ConditionalFormat is a data_bar/color_scale/top_n rule over a metric.
+type ConditionalFormat struct {
+	ID    string         `json:"id"`
+	Scope CFScope        `json:"scope"`
+	Kind  string         `json:"kind"`
+	Color string         `json:"color,omitempty"`
+	N     int            `json:"n,omitempty"`
+	Style StylePatchJSON `json:"style,omitempty"`
 }
 
 // FontSpec describes a font used by the report styles.
@@ -73,15 +112,17 @@ type BaseStyles struct {
 
 // ReportDefinition is the full declarative description of a report.
 type ReportDefinition struct {
-	ID         string          `json:"id"`
-	Version    int             `json:"version"`
-	Name       string          `json:"name"`
-	Dataset    Dataset         `json:"dataset"`
-	Dimensions []DimensionDef  `json:"dimensions"`
-	Metrics    []MetricDef     `json:"metrics"`
-	LayoutOpts LayoutOpts      `json:"layout_opts"`
-	BaseStyles BaseStyles      `json:"base_styles"`
-	StyleRules json.RawMessage `json:"style_rules"`
+	ID                 string              `json:"id"`
+	Version            int                 `json:"version"`
+	Name               string              `json:"name"`
+	Dataset            Dataset             `json:"dataset"`
+	Dimensions         []DimensionDef      `json:"dimensions"`
+	Metrics            []MetricDef         `json:"metrics"`
+	LayoutOpts         LayoutOpts          `json:"layout_opts"`
+	BaseStyles         BaseStyles          `json:"base_styles"`
+	Overrides          []OverrideDef       `json:"overrides,omitempty"`
+	ConditionalFormats []ConditionalFormat `json:"conditional_formats,omitempty"`
+	StyleRules         json.RawMessage     `json:"style_rules"`
 }
 
 // Load reads a report definition from path, parses it and validates it.
@@ -90,9 +131,18 @@ func Load(path string) (*ReportDefinition, error) {
 	if err != nil {
 		return nil, err
 	}
-	var def ReportDefinition
-	if err := json.Unmarshal(b, &def); err != nil {
+	def, err := ParseDefinition(string(b))
+	if err != nil {
 		return nil, fmt.Errorf("parse definition %s: %w", path, err)
+	}
+	return def, nil
+}
+
+// ParseDefinition 解析并校验定义 JSON 字符串。
+func ParseDefinition(jsonStr string) (*ReportDefinition, error) {
+	var def ReportDefinition
+	if err := json.Unmarshal([]byte(jsonStr), &def); err != nil {
+		return nil, fmt.Errorf("parse definition: %w", err)
 	}
 	if err := def.Validate(); err != nil {
 		return nil, err
@@ -109,6 +159,11 @@ func (d *ReportDefinition) Validate() error {
 	fields := make(map[string]string, len(d.Dataset.Fields))
 	for _, f := range d.Dataset.Fields {
 		fields[f.Key] = f.Type
+	}
+
+	dims := make(map[string]bool, len(d.Dimensions))
+	for _, dim := range d.Dimensions {
+		dims[dim.Field] = true
 	}
 
 	for _, dim := range d.Dimensions {
@@ -143,6 +198,50 @@ func (d *ReportDefinition) Validate() error {
 	}
 	if d.LayoutOpts.TotalPosition != "bottom" && d.LayoutOpts.TotalPosition != "top" {
 		return fmt.Errorf("layout_opts.total_position %q must be \"bottom\", \"top\" or empty", d.LayoutOpts.TotalPosition)
+	}
+
+	if p := d.LayoutOpts.Print; p != nil {
+		if p.Orientation != "" && p.Orientation != "portrait" && p.Orientation != "landscape" {
+			return fmt.Errorf("layout_opts.print.orientation %q must be \"portrait\", \"landscape\" or empty", p.Orientation)
+		}
+		if p.FitToWidth < 0 {
+			return fmt.Errorf("layout_opts.print.fit_to_width %d must be non-negative", p.FitToWidth)
+		}
+		if p.RepeatHeaderRows < 0 {
+			return fmt.Errorf("layout_opts.print.repeat_header_rows %d must be non-negative", p.RepeatHeaderRows)
+		}
+	}
+
+	validRowTypes := map[string]bool{"": true, "detail": true, "subtotal": true, "total": true}
+	for _, ov := range d.Overrides {
+		if !validRowTypes[ov.Scope.RowType] {
+			return fmt.Errorf("override %q: invalid row_type %q", ov.ID, ov.Scope.RowType)
+		}
+		if ov.Scope.Metric != "" && ov.Scope.Dim != "" {
+			return fmt.Errorf("override %q: metric and dim are mutually exclusive", ov.ID)
+		}
+		if ov.Scope.Metric != "" {
+			if _, ok := fields[ov.Scope.Metric]; !ok {
+				return fmt.Errorf("override %q: metric %q not found in dataset", ov.ID, ov.Scope.Metric)
+			}
+		}
+		if ov.Scope.Dim != "" {
+			if !dims[ov.Scope.Dim] {
+				return fmt.Errorf("override %q: dim %q not found in dimensions", ov.ID, ov.Scope.Dim)
+			}
+		}
+	}
+
+	validCFKinds := map[string]bool{"data_bar": true, "color_scale": true, "top_n": true}
+	for _, cf := range d.ConditionalFormats {
+		if cf.Scope.Metric != "" {
+			if _, ok := fields[cf.Scope.Metric]; !ok {
+				return fmt.Errorf("conditional_format %q: metric %q not found in dataset", cf.ID, cf.Scope.Metric)
+			}
+		}
+		if !validCFKinds[cf.Kind] {
+			return fmt.Errorf("conditional_format %q: invalid kind %q", cf.ID, cf.Kind)
+		}
 	}
 
 	return nil

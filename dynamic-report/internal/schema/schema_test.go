@@ -2,6 +2,7 @@ package schema
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 
 	"dynamic-report/internal/datahub"
@@ -169,5 +170,148 @@ func TestFormatDisplay(t *testing.T) {
 	}
 	if got := FormatDisplay(nil, "#,##0"); got != "" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+func TestBuildSchemaExplains(t *testing.T) {
+	def, err := model.Load("../model/testdata/overrides_test.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, _ := datahub.NewCSVSource("../datahub/testdata/sales.csv").Rows(def)
+	gs := engine.NewGroupStack(def)
+	for _, r := range rows {
+		gs.Feed(r)
+	}
+	gs.Finish()
+	engine.PositionPass(def, gs.Layout)
+	engine.AssemblyPass(def, gs.Layout)
+	doc, err := style.ParseRules(def.StyleRules)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := Build(def, gs.Layout, style.NewEngine(doc), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// zebra 命中的明细行（物理 3=布局 1，上海第 2 条）应带 Explains
+	row := s.Rows[2]
+	if len(row.Cells[2].Explains) == 0 {
+		t.Fatalf("row3 explains = %v", row.Cells[2].Explains)
+	}
+	if row.Cells[2].Explains[0].Reason == "" {
+		t.Fatal("empty reason")
+	}
+}
+
+func TestPageRows(t *testing.T) {
+	def, l := buildSample(t)
+	s, err := Build(def, l, style.NewEngine(&style.RulesDoc{}), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PageRows(0, 4); err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Rows) != 5 {
+		t.Fatalf("paged rows = %d", len(s.Rows))
+	}
+	if s.Rows[0].Idx != 1 || s.Rows[1].Idx != 2 {
+		t.Fatalf("header must stay first: %+v", s.Rows[0])
+	}
+}
+
+func TestBuildSchemaConditionalFormatsAndPrint(t *testing.T) {
+	def, err := model.Load("../model/testdata/overrides_test.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, _ := datahub.NewCSVSource("../datahub/testdata/sales.csv").Rows(def)
+	gs := engine.NewGroupStack(def)
+	for _, r := range rows {
+		gs.Feed(r)
+	}
+	gs.Finish()
+	engine.PositionPass(def, gs.Layout)
+	engine.AssemblyPass(def, gs.Layout)
+	s, err := Build(def, gs.Layout, style.NewEngine(&style.RulesDoc{}), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.PageSetup == nil || s.PageSetup.Orientation != "landscape" || s.PageSetup.RepeatHeaderRows != 1 || s.PageSetup.FitToWidth != 1 {
+		t.Fatalf("page setup = %+v", s.PageSetup)
+	}
+	if len(s.ConditionalFormats) == 0 {
+		t.Fatal("no conditional formats")
+	}
+	var dataBar *CFInfo
+	var topCF *CFInfo
+	for i := range s.ConditionalFormats {
+		cf := &s.ConditionalFormats[i]
+		if cf.Kind == "data_bar" {
+			dataBar = cf
+		}
+		if cf.Kind == "top_n" {
+			topCF = cf
+		}
+	}
+	if dataBar == nil || len(dataBar.Ranges) != 1 || dataBar.Ranges[0] != "C2:C11" {
+		t.Fatalf("data bar = %+v", dataBar)
+	}
+	if dataBar.Stats == nil || dataBar.Stats.Min != 100 || dataBar.Stats.Max != 1000 {
+		t.Fatalf("data bar stats = %+v, want {100,1000}", dataBar.Stats)
+	}
+	// per_group top_n 按 3 个叶子组展开，区间收束到组内最后一条明细行（不含小计行）。
+	want := []string{"C2:C3", "C5:C5", "C8:C8"}
+	if topCF == nil || !reflect.DeepEqual(topCF.Ranges, want) {
+		t.Fatalf("top_n ranges = %v, want %v", topCF.Ranges, want)
+	}
+}
+
+func TestBuildSchemaOverrideInRuleHits(t *testing.T) {
+	def, err := model.Load("../model/testdata/overrides_test.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, _ := datahub.NewCSVSource("../datahub/testdata/sales.csv").Rows(def)
+	gs := engine.NewGroupStack(def)
+	for _, r := range rows {
+		gs.Feed(r)
+	}
+	gs.Finish()
+	engine.PositionPass(def, gs.Layout)
+	engine.AssemblyPass(def, gs.Layout)
+	// 手工构造 override 伪规则（等价 pipeline.CompileOverrides 对 ov_ew 的产物），
+	// 避免 schema→pipeline 依赖。
+	doc := &style.RulesDoc{Rules: []style.Rule{
+		{
+			ID:       "override:ov_ew",
+			Priority: 1000,
+			When: style.Cond{All: []style.Cond{
+				{Ctx: "group_path", Op: "prefix", Values: []any{"华东"}},
+				{Ctx: "row_type", Op: "eq", Value: "subtotal"},
+			}},
+			Style: style.StyleSpec{Fill: &style.FillSpec{Color: "#FFF7E6"}, Bold: true},
+		},
+	}}
+	s, err := Build(def, gs.Layout, style.NewEngine(doc), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 华东小计行：布局 R5（上海subtotal R2、杭州subtotal R4 之后）→ s.Rows[6]（物理7）。
+	// 断言其 amount 指标列（Cells[2]）RuleHits 含 override:ov_ew。
+	row := s.Rows[6]
+	if row.Type != "subtotal" || row.GroupPath[0] != "华东" {
+		t.Fatalf("expected 华东 subtotal at s.Rows[6], got %+v", row)
+	}
+	hits := row.Cells[2].RuleHits
+	found := false
+	for _, h := range hits {
+		if h == "override:ov_ew" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("rule_hits = %v, want override:ov_ew", hits)
 	}
 }

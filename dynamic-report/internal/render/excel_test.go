@@ -3,6 +3,7 @@ package render
 import (
 	"bytes"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/xuri/excelize/v2"
@@ -207,5 +208,76 @@ func TestRenderRoundTrip(t *testing.T) {
 	}
 	if w <= 0 {
 		t.Errorf("A col width = %v, want > 0", w)
+	}
+}
+
+// TestRenderConditionalFormatsAndPrint 渲染 overrides_test.json 后回读内存
+// xlsx 并核对：条件格式存在（data_bar 颜色 638EC6）、打印标题 defined name。
+//
+// 说明：excelize v2.9.0 无公开 GetSheetXML，改用 GetConditionalFormats
+// 回读条件格式（data_bar 的 BarColor 回读为 "#638EC6"）。
+func TestRenderConditionalFormatsAndPrint(t *testing.T) {
+	def, err := model.Load("../model/testdata/overrides_test.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := pipeline.BuildReport(def, datahub.NewCSVSource("../datahub/testdata/sales.csv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := Render(def, s, &buf); err != nil {
+		t.Fatal(err)
+	}
+	f, err := excelize.OpenReader(bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { f.Close() })
+	// 条件格式存在：GetConditionalFormats 返回非空映射。
+	cfs, err := f.GetConditionalFormats("Sheet1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfs) == 0 {
+		t.Fatal("no conditional formatting in sheet")
+	}
+	// 数据条颜色出现（data_bar 回读 BarColor="#638EC6"）。
+	var barColor string
+	for _, rules := range cfs {
+		for _, r := range rules {
+			if r.BarColor != "" {
+				barColor = r.BarColor
+			}
+		}
+	}
+	if !strings.Contains(barColor, "638EC6") {
+		t.Fatalf("data bar color missing in sheet, got %q", barColor)
+	}
+	// 打印标题 defined name。
+	var printTitles bool
+	for _, dn := range f.GetDefinedName() {
+		if dn.Name == "_xlnm.Print_Titles" && dn.Scope == "Sheet1" {
+			printTitles = true
+		}
+	}
+	if !printTitles {
+		t.Fatal("print titles defined name missing")
+	}
+	// top_n 的 Rank 应为 DSL 声明的 N（3），而非 N-1（回归 M1 离一错误）。
+	cfMap, err := f.GetConditionalFormats("Sheet1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var topRank string
+	for _, opts := range cfMap {
+		for _, o := range opts {
+			if o.Type == "top" {
+				topRank = o.Value
+			}
+		}
+	}
+	if topRank != "3" {
+		t.Fatalf("top_n rank = %q, want 3", topRank)
 	}
 }

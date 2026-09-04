@@ -6,6 +6,7 @@ import "dynamic-report/internal/style"
 type DetailRow struct {
 	Keys   []string
 	Values map[string]any
+	RowNo  int // 明细序号（1-based，数据源按读取顺序编号）
 }
 
 // SubRange is an inclusive row-index range covered by an aggregated cell.
@@ -24,6 +25,7 @@ type LayoutCell struct {
 	Formula   string
 	StyleID   string
 	RuleHits  []string
+	Trace     *CellTrace `json:"-"`
 }
 
 // LayoutRow is one output row of the materialized layout.
@@ -52,4 +54,12 @@ type Layout struct {
 	Rows      []*LayoutRow
 	Merges    []MergeRange
 	ColWidths []float64
+}
+
+// CellTrace 描述单元格的数据来源：
+// 明细行 → SourceCount=1，SampleRows=[该行 RowNo]；
+// 小计/总计 → SourceCount=来源明细条数，SampleRows=前 5 条来源行号。
+type CellTrace struct {
+	SourceCount int   `json:"source_count"`
+	SampleRows  []int `json:"sample_rows,omitempty"`
 }
