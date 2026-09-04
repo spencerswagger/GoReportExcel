@@ -14,8 +14,8 @@ func ovDef() *model.ReportDefinition {
 		panic(err)
 	}
 	def.Overrides = []model.OverrideDef{{
-		ID: "ov_highlight",
-		Scope: model.OverrideScope{GroupPathPrefix: []string{"华东"}, RowType: "subtotal", Metric: "amount"},
+		ID:         "ov_highlight",
+		Scope:      model.OverrideScope{GroupPathPrefix: []string{"华东"}, RowType: "subtotal", Metric: "amount"},
 		StylePatch: model.StylePatchJSON{Fill: &model.FillPatchJSON{Color: "#FFF7E6"}, Bold: true},
 	}}
 	return def

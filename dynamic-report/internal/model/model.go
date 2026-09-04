@@ -131,9 +131,18 @@ func Load(path string) (*ReportDefinition, error) {
 	if err != nil {
 		return nil, err
 	}
-	var def ReportDefinition
-	if err := json.Unmarshal(b, &def); err != nil {
+	def, err := ParseDefinition(string(b))
+	if err != nil {
 		return nil, fmt.Errorf("parse definition %s: %w", path, err)
+	}
+	return def, nil
+}
+
+// ParseDefinition 解析并校验定义 JSON 字符串。
+func ParseDefinition(jsonStr string) (*ReportDefinition, error) {
+	var def ReportDefinition
+	if err := json.Unmarshal([]byte(jsonStr), &def); err != nil {
+		return nil, fmt.Errorf("parse definition: %w", err)
 	}
 	if err := def.Validate(); err != nil {
 		return nil, err
