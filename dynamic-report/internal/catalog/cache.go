@@ -80,7 +80,10 @@ func (c *Cache) GetPublished(ctx context.Context, id string) (*model.ReportDefin
 		return nil, 0, nil
 	}
 	c.mu.Lock()
-	c.items[id] = &cachedDef{version: meta.Version, payload: meta.Payload}
+	cur, ok := c.items[id]
+	if !ok || cur.version < meta.Version {
+		c.items[id] = &cachedDef{version: meta.Version, payload: meta.Payload}
+	}
 	c.mu.Unlock()
 	def, err := unmarshalDef(meta.Payload)
 	return def, meta.Version, err
