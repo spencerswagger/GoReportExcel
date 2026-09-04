@@ -57,8 +57,8 @@ type Layout struct {
 }
 
 // CellTrace 描述单元格的数据来源：
-// 明细行 → SourceRF 为所在明细的元素序号（main 列表中位置），SampleRows 为抽样行号；
-// 小计/总计 → SourceRF 为明细行范围，SampleRows 为抽样来源行。
+// 明细行 → SourceCount=1，SampleRows=[该行 RowNo]；
+// 小计/总计 → SourceCount=来源明细条数，SampleRows=前 5 条来源行号。
 type CellTrace struct {
 	SourceCount int   `json:"source_count"`
 	SampleRows  []int `json:"sample_rows,omitempty"`

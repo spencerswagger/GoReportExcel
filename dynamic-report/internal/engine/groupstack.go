@@ -124,7 +124,7 @@ func (g *GroupStack) detailRow(r DetailRow) *LayoutRow {
 	return row
 }
 
-// attachDetailTrace 为明细行的维度列附 Trace（指标列在 buildSubtotal 时处理）。
+// attachDetailTrace 为明细行全部单元格附 Trace（每格来源即该行自身）。
 func (g *GroupStack) attachDetailTrace(cells []LayoutCell, rowNo int) []LayoutCell {
 	for i := range cells {
 		cells[i].Trace = &CellTrace{SourceCount: 1, SampleRows: []int{rowNo}}
