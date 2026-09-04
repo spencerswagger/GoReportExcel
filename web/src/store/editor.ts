@@ -54,37 +54,49 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   setDraft: (draft, baseVersion) => set({ draft, baseVersion, saveState: 'clean' }),
 
-  setRender: (schema, rowTotal) => set({ render: schema, rowTotal }),
+  setRender: (schema, rowTotal) => set({ render: schema, rowTotal, selectedCell: null }),
 
   selectCell: (cellId) => set({ selectedCell: cellId }),
 
   checkpoint: (label) => {
-    const { draft, baseVersion, undoStack } = get();
-    undoStack.push({ label, draft: draft ? JSON.parse(JSON.stringify(draft)) : null, baseVersion });
-    set({ undoStack, redoStack: [] });
+    const { draft, baseVersion } = get();
+    set({
+      undoStack: [...get().undoStack, { label, draft: draft ? JSON.parse(JSON.stringify(draft)) : null, baseVersion }],
+      redoStack: [],
+    });
   },
 
   mutateDraft: (fn) => {
     const { draft, defId, baseVersion } = get();
-    const d = draft ?? { id: defId, version: baseVersion, name: '' };
+    const d = draft ? { ...draft } : { id: defId, version: baseVersion, name: '' };
     fn(d);
-    set({ draft: { ...d }, saveState: 'dirty' });
+    set({ draft: d, saveState: 'dirty', redoStack: [] });
   },
 
   undo: () => {
     const { undoStack, redoStack, draft, baseVersion } = get();
-    const cp = undoStack.pop();
+    const cp = undoStack[undoStack.length - 1];
     if (!cp) return;
-    redoStack.push({ label: 'redo', draft: draft ? JSON.parse(JSON.stringify(draft)) : null, baseVersion });
-    set({ draft: cp.draft, baseVersion: cp.baseVersion, undoStack, redoStack, saveState: 'dirty' });
+    set({
+      draft: cp.draft,
+      baseVersion: cp.baseVersion,
+      undoStack: undoStack.slice(0, -1),
+      redoStack: [...redoStack, { label: 'redo', draft: draft ? JSON.parse(JSON.stringify(draft)) : null, baseVersion }],
+      saveState: 'dirty',
+    });
   },
 
   redo: () => {
     const { undoStack, redoStack } = get();
-    const cp = redoStack.pop();
+    const cp = redoStack[redoStack.length - 1];
     if (!cp) return;
-    undoStack.push(cp);
-    set({ draft: cp.draft, baseVersion: cp.baseVersion, undoStack, redoStack, saveState: 'dirty' });
+    set({
+      draft: cp.draft,
+      baseVersion: cp.baseVersion,
+      undoStack: [...undoStack, cp],
+      redoStack: redoStack.slice(0, -1),
+      saveState: 'dirty',
+    });
   },
 
   setSaveState: (saveState) => set({ saveState }),
