@@ -26,7 +26,8 @@ func TestLoadValid(t *testing.T) {
 	}
 }
 
-func TestLoadRejectsUnknownField(t *testing.T) {
+// TestLoadRejectsUnknownMetricField 验证指标引用了数据集中不存在的字段时 Load 报错。
+func TestLoadRejectsUnknownMetricField(t *testing.T) {
 	m := map[string]any{}
 	if err := json.Unmarshal(mustRead(t, "testdata/valid.json"), &m); err != nil {
 		t.Fatalf("unmarshal fixture: %v", err)
@@ -83,6 +84,26 @@ func TestValidateDefaultsTotalPosition(t *testing.T) {
 	}
 	if def.LayoutOpts.TotalPosition != "bottom" {
 		t.Errorf("LayoutOpts.TotalPosition = %q, want %q", def.LayoutOpts.TotalPosition, "bottom")
+	}
+}
+
+func TestValidateRejectsNumericDimensionField(t *testing.T) {
+	var def ReportDefinition
+	if err := json.Unmarshal(mustRead(t, "testdata/valid.json"), &def); err != nil {
+		t.Fatalf("unmarshal fixture: %v", err)
+	}
+	// 维度字段类型必须是 string：把 region 字段类型改为 number，模拟数值维度。
+	for i := range def.Dataset.Fields {
+		if def.Dataset.Fields[i].Key == "region" {
+			def.Dataset.Fields[i].Type = "number"
+		}
+	}
+	err := def.Validate()
+	if err == nil {
+		t.Fatal("Validate() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "region") || !strings.Contains(err.Error(), "number") {
+		t.Errorf("error = %q, want it to contain %q and %q", err.Error(), "region", "number")
 	}
 }
 

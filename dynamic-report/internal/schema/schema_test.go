@@ -121,6 +121,42 @@ func TestBuildSchemaStylesAndFormulas(t *testing.T) {
 	}
 }
 
+func TestBuildRowHeightFromStyleRules(t *testing.T) {
+	def, l := buildSample(t)
+	def.StyleRules = json.RawMessage(`{"version":1,"rules":[
+	  {"id":"subtotal-emphasis","priority":120,
+	   "when":{"ctx":"row_type","op":"eq","value":"subtotal"},
+	   "style":{"row_height":22}}]}`)
+	doc, err := style.ParseRules(def.StyleRules)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := Build(def, l, style.NewEngine(doc), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 行高是行级属性：subtotal 行由规则求得 Height==22，detail 行不受规则影响 Height==0。
+	var subtotal, detail int
+	for _, r := range s.Rows {
+		switch r.Type {
+		case "subtotal":
+			subtotal++
+			if r.Height != 22 {
+				t.Errorf("subtotal row Idx=%d Height=%v, want 22", r.Idx, r.Height)
+			}
+		case "detail":
+			detail++
+			if r.Height != 0 {
+				t.Errorf("detail row Idx=%d Height=%v, want 0", r.Idx, r.Height)
+			}
+		}
+	}
+	if subtotal == 0 || detail == 0 {
+		t.Fatalf("expected both subtotal and detail rows, got subtotal=%d detail=%d", subtotal, detail)
+	}
+}
+
 func TestFormatDisplay(t *testing.T) {
 	if got := FormatDisplay(12500.5, "#,##0.00"); got != "12,500.50" {
 		t.Fatalf("got %q", got)

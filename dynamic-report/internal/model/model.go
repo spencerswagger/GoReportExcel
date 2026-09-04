@@ -106,14 +106,18 @@ func (d *ReportDefinition) Validate() error {
 		return fmt.Errorf("metrics: at least one metric is required")
 	}
 
-	fields := make(map[string]bool, len(d.Dataset.Fields))
+	fields := make(map[string]string, len(d.Dataset.Fields))
 	for _, f := range d.Dataset.Fields {
-		fields[f.Key] = true
+		fields[f.Key] = f.Type
 	}
 
 	for _, dim := range d.Dimensions {
-		if !fields[dim.Field] {
+		ft, ok := fields[dim.Field]
+		if !ok {
 			return fmt.Errorf("dimension %q: field %q not found in dataset", dim.Field, dim.Field)
+		}
+		if ft != "string" {
+			return fmt.Errorf("dimension %q: field %q type %q must be \"string\"", dim.Field, dim.Field, ft)
 		}
 		if dim.Sort.By != "sort_key" && dim.Sort.By != "value" {
 			return fmt.Errorf("dimension %q: sort.by %q must be \"sort_key\" or \"value\"", dim.Field, dim.Sort.By)
@@ -124,7 +128,7 @@ func (d *ReportDefinition) Validate() error {
 	}
 
 	for _, m := range d.Metrics {
-		if !fields[m.Field] {
+		if _, ok := fields[m.Field]; !ok {
 			return fmt.Errorf("metric %q: field %q not found in dataset", m.Field, m.Field)
 		}
 		switch m.Agg {

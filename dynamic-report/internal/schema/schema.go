@@ -137,12 +137,18 @@ func Build(def *model.ReportDefinition, l *engine.Layout, se *style.Engine, trac
 			Idx: physRow, Type: row.Type.String(),
 			GroupPath: row.GroupPath, Seq: row.SeqInGroup, Height: row.Height,
 		}
+		// 行高是行级属性：engine 行高恒为 0，行高只能来自样式规则求值结果。
+		// 循环单元格时收集该行首个 st.RowHeight>0 的值，循环结束后统一赋给 dto.Height。
+		var rowHeight float64
 		for c := 0; c < ncols && c < len(row.Cells); c++ {
 			cell := row.Cells[c]
 			ctx := buildCtx(def, row, physRow, c, lastBodyIdx)
 			st, hits, err := se.Resolve(ctx)
 			if err != nil {
 				return nil, err
+			}
+			if st.RowHeight > 0 && rowHeight == 0 {
+				rowHeight = st.RowHeight
 			}
 			numFmt := ""
 			if cell.MetricIdx >= 0 {
@@ -157,6 +163,9 @@ func Build(def *model.ReportDefinition, l *engine.Layout, se *style.Engine, trac
 				Style:    intern(st),
 				RuleHits: onlyIf(trace, hits),
 			})
+		}
+		if rowHeight > 0 {
+			dto.Height = rowHeight
 		}
 		s.Rows = append(s.Rows, dto)
 	}
