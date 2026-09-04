@@ -107,6 +107,86 @@ func TestValidateRejectsNumericDimensionField(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsOverrideBadRowType(t *testing.T) {
+	var def ReportDefinition
+	if err := json.Unmarshal(mustRead(t, "testdata/valid.json"), &def); err != nil {
+		t.Fatalf("unmarshal fixture: %v", err)
+	}
+	def.Overrides = []OverrideDef{{
+		ID:    "ov1",
+		Scope: OverrideScope{RowType: "grand_total"},
+		StylePatch: StylePatchJSON{
+			Fill: &FillPatchJSON{Color: "#FFF"},
+		},
+	}}
+	err := def.Validate()
+	if err == nil {
+		t.Fatal("Validate() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "grand_total") {
+		t.Errorf("error = %q, want it to contain %q", err.Error(), "grand_total")
+	}
+}
+
+func TestValidateRejectsOverrideUnknownMetric(t *testing.T) {
+	var def ReportDefinition
+	if err := json.Unmarshal(mustRead(t, "testdata/valid.json"), &def); err != nil {
+		t.Fatalf("unmarshal fixture: %v", err)
+	}
+	def.Overrides = []OverrideDef{{
+		ID:         "ov2",
+		Scope:      OverrideScope{Metric: "ghost"},
+		StylePatch: StylePatchJSON{Fill: &FillPatchJSON{Color: "#FFF"}},
+	}}
+	err := def.Validate()
+	if err == nil {
+		t.Fatal("Validate() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "ghost") {
+		t.Errorf("error = %q, want it to contain %q", err.Error(), "ghost")
+	}
+}
+
+func TestValidateRejectsCFUnknownKind(t *testing.T) {
+	var def ReportDefinition
+	if err := json.Unmarshal(mustRead(t, "testdata/valid.json"), &def); err != nil {
+		t.Fatalf("unmarshal fixture: %v", err)
+	}
+	def.ConditionalFormats = []ConditionalFormat{{
+		ID:    "cf1",
+		Scope: CFScope{Metric: "amount"},
+		Kind:  "sparkline",
+	}}
+	err := def.Validate()
+	if err == nil {
+		t.Fatal("Validate() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "sparkline") {
+		t.Errorf("error = %q, want it to contain %q", err.Error(), "sparkline")
+	}
+}
+
+func TestPrintOptsValidation(t *testing.T) {
+	var def ReportDefinition
+	if err := json.Unmarshal(mustRead(t, "testdata/valid.json"), &def); err != nil {
+		t.Fatalf("unmarshal fixture: %v", err)
+	}
+	def.LayoutOpts.Print = &PrintOpts{Orientation: "diagonal"}
+	err := def.Validate()
+	if err == nil {
+		t.Fatal("Validate() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "orientation") {
+		t.Errorf("error = %q, want it to contain %q", err.Error(), "orientation")
+	}
+	// 先清空再设置合法打印选项。
+	def.LayoutOpts.Print = nil
+	def.LayoutOpts.Print = &PrintOpts{Orientation: "landscape", FitToWidth: 1, RepeatHeaderRows: 1}
+	if err := def.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v, want nil", err)
+	}
+}
+
 func mustRead(t *testing.T, p string) []byte {
 	t.Helper()
 	b, err := os.ReadFile(p)
