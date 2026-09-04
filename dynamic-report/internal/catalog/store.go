@@ -13,16 +13,16 @@ import (
 var ErrDraftConflict = errors.New("draft conflict: base version outdated")
 
 const schemaSQL = `
-CREATE TABLE definitions (
-	id TEXT,
-	version INTEGER,
-	status TEXT,
-	payload TEXT,
-	updated_by TEXT,
-	updated_at TEXT,
+CREATE TABLE IF NOT EXISTS definitions (
+	id TEXT NOT NULL,
+	version INTEGER NOT NULL,
+	status TEXT NOT NULL,
+	payload TEXT NOT NULL,
+	updated_by TEXT NOT NULL DEFAULT '',
+	updated_at TEXT NOT NULL,
 	PRIMARY KEY (id, version)
 );
-CREATE INDEX idx_defs_id ON definitions (id);
+CREATE INDEX IF NOT EXISTS idx_defs_id ON definitions (id);
 `
 
 // DefMeta is the full stored metadata of one definition version.
@@ -109,45 +109,57 @@ func (s *Store) SaveDraft(id, payload, by string) error {
 		return fmt.Errorf("%w: have %d, base %d", ErrDraftConflict, *maxV, p.Version)
 	}
 
-	_, err := s.db.Exec(`INSERT INTO definitions(id, version, status, payload, updated_by, updated_at)
+	res, err := s.db.Exec(`INSERT INTO definitions(id, version, status, payload, updated_by, updated_at)
 		VALUES (?, ?, 'draft', ?, ?, ?)
 		ON CONFLICT(id, version) DO UPDATE SET
 			payload = excluded.payload,
 			updated_by = excluded.updated_by,
-			updated_at = excluded.updated_at`,
+			updated_at = excluded.updated_at
+		WHERE definitions.status = 'draft'`,
 		id, p.Version, payload, by, now())
 	if err != nil {
 		return fmt.Errorf("save draft %s: %w", id, err)
+	}
+	// A zero row count means the conflicting row was a published version:
+	// never overwrite published data with draft content.
+	if n, _ := res.RowsAffected(); n == 0 {
+		return fmt.Errorf("save draft %s: base version %d collides with a published version", id, p.Version)
 	}
 	return nil
 }
 
 // Publish promotes the newest draft to a published version.
 func (s *Store) Publish(id, by string) error {
-	draft, err := s.GetDraft(id)
-	if err != nil {
-		return err
-	}
-	if draft == nil {
-		return fmt.Errorf("publish %s: no draft found", id)
-	}
-
 	tx, err := s.db.Begin()
 	if err != nil {
-		return err
+		return fmt.Errorf("publish %s: %w", id, err)
 	}
 	defer tx.Rollback()
+
+	// Read the newest draft inside the transaction so a concurrent SaveDraft
+	// cannot slip in between the read and the write.
+	var draft DefMeta
+	err = tx.QueryRow(`SELECT id, version, status, payload, updated_by, updated_at
+		FROM definitions WHERE id = ? AND status = 'draft'
+		ORDER BY version DESC, updated_at DESC LIMIT 1`, id).
+		Scan(&draft.ID, &draft.Version, &draft.Status, &draft.Payload, &draft.UpdatedBy, &draft.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("publish %s: no draft found", id)
+		}
+		return fmt.Errorf("publish %s: %w", id, err)
+	}
 
 	// The next published version is one above the newest published version;
 	// when nothing has been published yet it is one above the draft's version.
 	var maxV int
 	if err := tx.QueryRow(`SELECT COALESCE(MAX(version), ?) FROM definitions WHERE id = ? AND status = 'published'`, draft.Version, id).Scan(&maxV); err != nil {
-		return err
+		return fmt.Errorf("publish %s: %w", id, err)
 	}
 	newV := maxV + 1
 	payload, err := bumpVersion(draft.Payload, newV)
 	if err != nil {
-		return err
+		return fmt.Errorf("publish %s: %w", id, err)
 	}
 	if _, err := tx.Exec(`INSERT INTO definitions(id, version, status, payload, updated_by, updated_at)
 		VALUES (?, ?, 'published', ?, ?, ?)
@@ -156,10 +168,10 @@ func (s *Store) Publish(id, by string) error {
 			payload = excluded.payload,
 			updated_by = excluded.updated_by,
 			updated_at = excluded.updated_at`, id, newV, payload, by, now()); err != nil {
-		return err
+		return fmt.Errorf("publish %s: %w", id, err)
 	}
 	if _, err := tx.Exec(`DELETE FROM definitions WHERE id = ? AND status = 'draft'`, id); err != nil {
-		return err
+		return fmt.Errorf("publish %s: %w", id, err)
 	}
 	return tx.Commit()
 }

@@ -3,6 +3,7 @@ package catalog
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	_ "modernc.org/sqlite"
@@ -227,5 +228,64 @@ func TestStoreDiffSummary(t *testing.T) {
 		if !got[want] {
 			t.Errorf("DiffSummary missing key %q; got %v", want, keys)
 		}
+	}
+}
+
+func TestStoreSaveDraftRejectsPublishedCollision(t *testing.T) {
+	s := openTest(t)
+	if err := s.SaveDraft("r1", validPayload("r1", 1), "alice"); err != nil {
+		t.Fatalf("SaveDraft v1: %v", err)
+	}
+	if err := s.Publish("r1", "a"); err != nil {
+		t.Fatalf("Publish v2: %v", err)
+	}
+	// A draft whose base version equals an existing published version must not
+	// silently overwrite the published row.
+	if err := s.SaveDraft("r1", validPayload("r1", 2), "bob"); err == nil {
+		t.Fatal("SaveDraft with base version equal to a published version should fail")
+	}
+	// The published row must be untouched and still publishable.
+	pub, err := s.GetPublished("r1")
+	if err != nil || pub == nil {
+		t.Fatalf("published = %v err = %v", pub, err)
+	}
+	if pub.Version != 2 {
+		t.Fatalf("published version = %d, want 2", pub.Version)
+	}
+	var m map[string]any
+	if err := json.Unmarshal([]byte(pub.Payload), &m); err != nil {
+		t.Fatalf("unmarshal published payload: %v", err)
+	}
+	if m["name"] != "R" {
+		t.Fatalf("published payload corrupted: %v", m["name"])
+	}
+}
+
+func TestStoreNewStoreIdempotent(t *testing.T) {
+	db, err := sql.Open("sqlite", "file:"+t.TempDir()+"/catalog.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	if _, err := NewStore(db); err != nil {
+		t.Fatalf("first NewStore: %v", err)
+	}
+	if _, err := NewStore(db); err != nil {
+		t.Fatalf("second NewStore on existing schema should succeed: %v", err)
+	}
+}
+
+func TestStoreDraftConflictRejected(t *testing.T) {
+	s := openTest(t)
+	if err := s.SaveDraft("r1", validPayload("r1", 1), "a"); err != nil {
+		t.Fatalf("SaveDraft v1: %v", err)
+	}
+	if err := s.SaveDraft("r1", validPayload("r1", 2), "b"); err != nil {
+		t.Fatalf("SaveDraft v2: %v", err)
+	}
+	// Base version 1 is older than the stored draft v2: must be rejected.
+	err := s.SaveDraft("r1", validPayload("r1", 1), "c")
+	if !errors.Is(err, ErrDraftConflict) {
+		t.Fatalf("err = %v, want ErrDraftConflict", err)
 	}
 }
