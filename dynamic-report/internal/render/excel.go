@@ -48,14 +48,22 @@ func Render(def *model.ReportDefinition, s *schema.RenderSchema, w io.Writer) er
 	// 1) 样式字典 → excelize.NewStyle（body 字体基座）。
 	styleIDs := make(map[string]int, len(s.Styles))
 	for id, st := range s.Styles {
-		sid, err := f.NewStyle(toExcelStyle(def, st, false))
+		es, err := toExcelStyle(def, st, false)
+		if err != nil {
+			return fmt.Errorf("new style %s: %w", id, err)
+		}
+		sid, err := f.NewStyle(es)
 		if err != nil {
 			return fmt.Errorf("new style %s: %w", id, err)
 		}
 		styleIDs[id] = sid
 	}
 	// 表头样式：HeaderFont 基座 + Bold 取或。
-	headerSID, err := f.NewStyle(toExcelStyle(def, style.ResolvedStyle{Bold: def.BaseStyles.HeaderFont.Bold}, true))
+	headerES, err := toExcelStyle(def, style.ResolvedStyle{Bold: def.BaseStyles.HeaderFont.Bold}, true)
+	if err != nil {
+		return fmt.Errorf("new header style: %w", err)
+	}
+	headerSID, err := f.NewStyle(headerES)
 	if err != nil {
 		return fmt.Errorf("new header style: %w", err)
 	}
@@ -68,8 +76,13 @@ func Render(def *model.ReportDefinition, s *schema.RenderSchema, w io.Writer) er
 		}
 	}
 
-	// 3) 逐行逐格：先值后公式，最后应用样式。
+	// 3) 逐行逐格：先行高后单元格（先值后公式，最后应用样式）。
 	for _, row := range s.Rows {
+		if row.Height > 0 {
+			if err := f.SetRowHeight(sheet, row.Idx, row.Height); err != nil {
+				return err
+			}
+		}
 		for _, cell := range row.Cells {
 			axis := fmt.Sprintf("%s%d", ColumnName(cell.Col+1), row.Idx)
 			if cell.Value != nil {
@@ -131,8 +144,8 @@ func Render(def *model.ReportDefinition, s *schema.RenderSchema, w io.Writer) er
 
 // toExcelStyle 把 ResolvedStyle 与基础字体转换为 excelize.Style。
 // isHeader 决定字体基座取 HeaderFont 还是 BodyFont；Bold 取基座与规则
-// 命中值的或。
-func toExcelStyle(def *model.ReportDefinition, st style.ResolvedStyle, isHeader bool) *excelize.Style {
+// 命中值的或。未知线型属于防御性错误（DSL 校验已限定 6 种线型）。
+func toExcelStyle(def *model.ReportDefinition, st style.ResolvedStyle, isHeader bool) (*excelize.Style, error) {
 	fontSpec := def.BaseStyles.BodyFont
 	if isHeader {
 		fontSpec = def.BaseStyles.HeaderFont
@@ -150,24 +163,41 @@ func toExcelStyle(def *model.ReportDefinition, st style.ResolvedStyle, isHeader 
 	if st.Fill != "" {
 		es.Fill = excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{st.Fill}}
 	}
-	if st.Indent > 0 || isHeader {
-		es.Alignment = &excelize.Alignment{Indent: st.Indent, WrapText: isHeader}
+	switch {
+	case st.Indent > 0:
+		// indent 只在 horizontal=left/right/distributed 下生效，必须显式给
+		// Horizontal=left 否则分组缩进在 Excel 中不生效；Vertical 与
+		// WrapText 保证缩进行内文字垂直居中、自动换行。
+		es.Alignment = &excelize.Alignment{Indent: st.Indent, Horizontal: "left", Vertical: "center", WrapText: true}
+	case isHeader:
+		es.Alignment = &excelize.Alignment{Vertical: "center", WrapText: true}
 	}
 	var borders []excelize.Border
-	addBorder := func(side, typ string) {
-		if side == "" {
-			return
+	addBorder := func(lineStyle, borderType string) error {
+		if lineStyle == "" {
+			return nil
 		}
-		code, ok := borderStyleCodes[side]
+		code, ok := borderStyleCodes[lineStyle]
 		if !ok {
-			return
+			return fmt.Errorf("unknown border style %q", lineStyle)
 		}
-		borders = append(borders, excelize.Border{Type: typ, Style: code, Color: "FF000000"})
+		// excelize getPaletteColor 会对 6 位色值自动补 "FF" 前缀；写
+		// "#000000" 而非 "FF000000"，避免生成 10 位非法 ARGB。
+		borders = append(borders, excelize.Border{Type: borderType, Style: code, Color: "#000000"})
+		return nil
 	}
-	addBorder(st.BorderLeft, "left")
-	addBorder(st.BorderRight, "right")
-	addBorder(st.BorderTop, "top")
-	addBorder(st.BorderBottom, "bottom")
+	if err := addBorder(st.BorderLeft, "left"); err != nil {
+		return nil, err
+	}
+	if err := addBorder(st.BorderRight, "right"); err != nil {
+		return nil, err
+	}
+	if err := addBorder(st.BorderTop, "top"); err != nil {
+		return nil, err
+	}
+	if err := addBorder(st.BorderBottom, "bottom"); err != nil {
+		return nil, err
+	}
 	es.Border = borders
-	return es
+	return es, nil
 }

@@ -10,7 +10,89 @@ import (
 	"dynamic-report/internal/datahub"
 	"dynamic-report/internal/model"
 	"dynamic-report/internal/pipeline"
+	"dynamic-report/internal/style"
 )
+
+// testDef 返回一个仅含基础字体的最小报告定义，供 toExcelStyle 单元测试使用。
+func testDef(t *testing.T) *model.ReportDefinition {
+	t.Helper()
+	return &model.ReportDefinition{
+		BaseStyles: model.BaseStyles{
+			HeaderFont: model.FontSpec{Name: "Arial", Size: 11, Bold: true},
+			BodyFont:   model.FontSpec{Name: "Arial", Size: 10},
+		},
+	}
+}
+
+// TestToExcelStyleBorderColor 回归 I2：边框颜色必须是 6 位 "#000000"，
+// 否则 excelize getPaletteColor 再补 "FF" 前缀会形成 10 位非法 ARGB。
+func TestToExcelStyleBorderColor(t *testing.T) {
+	st := style.ResolvedStyle{
+		BorderTop: "thin", BorderRight: "medium",
+		BorderBottom: "thick", BorderLeft: "dashed",
+	}
+	es, err := toExcelStyle(testDef(t), st, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(es.Border) != 4 {
+		t.Fatalf("borders = %d, want 4", len(es.Border))
+	}
+	for _, b := range es.Border {
+		if b.Color != "#000000" {
+			t.Errorf("border %s color = %q, want #000000", b.Type, b.Color)
+		}
+	}
+}
+
+// TestAlignIndent 回归 I3：Indent>0 时 Alignment 必须完整给出
+// Horizontal=left、Vertical=center、WrapText=true，否则分组缩进在
+// Excel 中不生效。
+func TestAlignIndent(t *testing.T) {
+	st := style.ResolvedStyle{Indent: 2}
+	es, err := toExcelStyle(testDef(t), st, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := es.Alignment
+	if a == nil {
+		t.Fatal("Alignment is nil, want indent-aligned style")
+	}
+	if a.Horizontal != "left" {
+		t.Errorf("Horizontal = %q, want left", a.Horizontal)
+	}
+	if a.Vertical != "center" {
+		t.Errorf("Vertical = %q, want center", a.Vertical)
+	}
+	if a.Indent != 2 {
+		t.Errorf("Indent = %d, want 2", a.Indent)
+	}
+	if !a.WrapText {
+		t.Error("WrapText = false, want true")
+	}
+}
+
+// TestHeaderAlignment 覆盖 I3 的表头分支：header 样式 Vertical=center、
+// WrapText=true 且不引入 Indent。
+func TestHeaderAlignment(t *testing.T) {
+	es, err := toExcelStyle(testDef(t), style.ResolvedStyle{Bold: true}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := es.Alignment
+	if a == nil {
+		t.Fatal("header Alignment is nil")
+	}
+	if a.Vertical != "center" {
+		t.Errorf("header Vertical = %q, want center", a.Vertical)
+	}
+	if !a.WrapText {
+		t.Error("header WrapText = false, want true")
+	}
+	if a.Indent != 0 {
+		t.Errorf("header Indent = %d, want 0", a.Indent)
+	}
+}
 
 // buildSchema 构建完整渲染管道并输出 xlsx 字节：
 // model.Load → pipeline.BuildReport → Render。

@@ -20,7 +20,7 @@ func loadDef(t *testing.T) *model.ReportDefinition {
 
 // TestBuildReportE2E 端到端：定义 + CSV → 完整 schema，核对行数与末行类型。
 func TestBuildReportE2E(t *testing.T) {
-	s, err := BuildReport(loadDef(t), datahub.NewCSVSource("../datahub/testdata/sales.csv"))
+	s, err := BuildReport(loadDef(t), datahub.NewCSVSource("../../testdata/e2e/sales.csv"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +38,7 @@ func TestBuildReportRowCapRejects(t *testing.T) {
 	def := loadDef(t)
 	def.Dataset.RowCap = 2 // 数据源 4 行 > 2
 
-	_, err := BuildReport(def, datahub.NewCSVSource("../datahub/testdata/sales.csv"))
+	_, err := BuildReport(def, datahub.NewCSVSource("../../testdata/e2e/sales.csv"))
 	if err == nil {
 		t.Fatal("expected error for row cap exceeded, got nil")
 	}
