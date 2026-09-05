@@ -1,10 +1,11 @@
+import type { ConditionalFormatDef } from '../store/types';
 import type { RuleJSON } from '../panels/RuleBuilder';
 
 export interface Theme {
   id: string;
   name: string;
   rules: RuleJSON[];
-  conditional_formats: Array<{ id: string; scope: { metric: string }; kind: string; color?: string; n?: number }>;
+  conditional_formats: ConditionalFormatDef[];
 }
 
 // 财务报告风：外粗内细边框 + 小计加粗 + 组内斑马纹 + 金额数据条

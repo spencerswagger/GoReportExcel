@@ -1,7 +1,6 @@
-import { financeTheme as base, type Theme } from './finance';
+import type { Theme } from './finance';
 
 export const compactTheme: Theme = {
-  ...base,
   id: 'compact',
   name: '数据密集型',
   rules: [
