@@ -7,6 +7,7 @@ import (
 	"os"
 	"testing"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "modernc.org/sqlite"
 )
 
@@ -339,16 +340,18 @@ func TestStorePostgresLifecycle(t *testing.T) {
 	if err := s.Publish("pg1", "test"); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
+	// 首个发布版本 = 草稿版本 + 1（与 SQLite 流程一致）。
 	pub, err := s.GetPublished("pg1")
 	if err != nil || pub == nil {
 		t.Fatalf("GetPublished = %v err = %v", pub, err)
 	}
-	if pub.Version != 1 {
-		t.Fatalf("published version = %d, want 1", pub.Version)
+	if pub.Version != 2 {
+		t.Fatalf("published version = %d, want 2", pub.Version)
 	}
-	if err := s.Rollback("pg1", 1, "test"); err != nil {
+	if err := s.Rollback("pg1", 2, "test"); err != nil {
 		t.Fatalf("Rollback: %v", err)
 	}
+	// 回滚产生一个新发布版本 v3，全库共 v2、v3 两行。
 	vs, err := s.Versions("pg1")
 	if err != nil || len(vs) != 2 {
 		t.Fatalf("Versions = %v err = %v (want 2 rows)", vs, err)
