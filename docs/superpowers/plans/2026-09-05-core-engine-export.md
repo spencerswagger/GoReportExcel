@@ -55,7 +55,7 @@ dynamic-report/
 - Create: `go.mod`
 - Create: `.gitignore`
 
-- [ ] **Step 1: 初始化模块**
+- [x] **Step 1: 初始化模块**
 
 ```bash
 mkdir -p dynamic-report && cd dynamic-report
@@ -63,7 +63,7 @@ go mod init dynamic-report
 mkdir -p cmd/reportgen internal/model internal/style internal/engine internal/datahub internal/schema internal/render spikes testdata/e2e
 ```
 
-- [ ] **Step 2: 添加依赖**
+- [x] **Step 2: 添加依赖**
 
 ```bash
 cd dynamic-report && go get github.com/qax-os/excelize/v2@v2.9.0
@@ -71,14 +71,14 @@ cd dynamic-report && go get github.com/qax-os/excelize/v2@v2.9.0
 
 Expected: 下载成功；若 v2.9.0 不存在则用 `go get github.com/qax-os/excelize/v2@latest` 并记录实际版本到 spike 发现文档。
 
-- [ ] **Step 3: 写 .gitignore**
+- [x] **Step 3: 写 .gitignore**
 
 ```
 /reportgen
 *.xlsx
 ```
 
-- [ ] **Step 4: 验证构建环境**
+- [x] **Step 4: 验证构建环境**
 
 ```bash
 cd dynamic-report && go build ./...
@@ -86,7 +86,7 @@ cd dynamic-report && go build ./...
 
 Expected: 无输出（空模块构建成功）。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add -A && git commit -m "chore: init go module for dynamic-report core"
@@ -102,7 +102,7 @@ git add -A && git commit -m "chore: init go module for dynamic-report core"
 - Create: `spikes/excelize_spike_test.go`
 - Create: `spikes/FINDINGS.md`
 
-- [ ] **Step 1: 编写 spike 测试**
+- [x] **Step 1: 编写 spike 测试**
 
 ```go
 package spikes
@@ -202,12 +202,12 @@ func colName(n int) string {
 }
 ```
 
-- [ ] **Step 2: 运行 spike 并记录结论**
+- [x] **Step 2: 运行 spike 并记录结论**
 
 Run: `cd dynamic-report && go test ./spikes/ -v`
 Expected: 各用例输出结论。失败的用例不修复，把"实际 API 形态 / 失败原因"记录到 `spikes/FINDINGS.md`（每个验证项一段：结论 + 对渲染任务的影响）。若 `TestSpikeWritePerf` 超过 10 秒，在 FINDINGS.md 记录，并提示渲染任务考虑 StreamWriter。
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add spikes/ && git commit -m "spike: verify excelize conditional format, formula cache, print titles"
@@ -220,7 +220,7 @@ git add spikes/ && git commit -m "spike: verify excelize conditional format, for
 - Test: `internal/model/model_test.go`
 - Create: `internal/model/testdata/valid.json`
 
-- [ ] **Step 1: 写夹具 `internal/model/testdata/valid.json`**
+- [x] **Step 1: 写夹具 `internal/model/testdata/valid.json`**
 
 ```json
 {
@@ -252,7 +252,7 @@ git add spikes/ && git commit -m "spike: verify excelize conditional format, for
 }
 ```
 
-- [ ] **Step 2: 写失败测试 `internal/model/model_test.go`**
+- [x] **Step 2: 写失败测试 `internal/model/model_test.go`**
 
 ```go
 package model
@@ -325,12 +325,12 @@ func mustRead(t *testing.T, p string) []byte {
 }
 ```
 
-- [ ] **Step 3: 运行确认失败**
+- [x] **Step 3: 运行确认失败**
 
 Run: `cd dynamic-report && go test ./internal/model/ -v`
 Expected: 编译失败（类型未定义）。
 
-- [ ] **Step 4: 实现 `internal/model/model.go`**
+- [x] **Step 4: 实现 `internal/model/model.go`**
 
 ```go
 package model
@@ -465,12 +465,12 @@ func (d *ReportDefinition) Validate() error {
 }
 ```
 
-- [ ] **Step 5: 运行确认通过**
+- [x] **Step 5: 运行确认通过**
 
 Run: `cd dynamic-report && go test ./internal/model/ -v`
 Expected: 4 个用例全部 PASS。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add internal/model && git commit -m "feat(model): report definition loading and validation"
@@ -484,7 +484,7 @@ git add internal/model && git commit -m "feat(model): report definition loading 
 - Create: `internal/style/dsl.go`
 - Test: `internal/style/dsl_test.go`
 
-- [ ] **Step 1: 写失败测试 `internal/style/dsl_test.go`**
+- [x] **Step 1: 写失败测试 `internal/style/dsl_test.go`**
 
 ```go
 package style
@@ -562,12 +562,12 @@ func TestParseRulesRejectsBadCondOp(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd dynamic-report && go test ./internal/style/ -v`
 Expected: 编译失败。
 
-- [ ] **Step 3: 实现 `internal/style/dsl.go`**
+- [x] **Step 3: 实现 `internal/style/dsl.go`**
 
 ```go
 package style
@@ -765,12 +765,12 @@ func (s *StyleSpec) validate(path string) error {
 }
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `cd dynamic-report && go test ./internal/style/ -v -run TestParseRules`
 Expected: 6 个用例全部 PASS。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/style && git commit -m "feat(style): DSL types, parsing and validation"
@@ -784,7 +784,7 @@ git add internal/style && git commit -m "feat(style): DSL types, parsing and val
 - Create: `internal/style/context.go`
 - Test: `internal/style/context_test.go`
 
-- [ ] **Step 1: 写失败测试 `internal/style/context_test.go`**
+- [x] **Step 1: 写失败测试 `internal/style/context_test.go`**
 
 ```go
 package style
@@ -888,12 +888,12 @@ func TestBorderSideResolveAt(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd dynamic-report && go test ./internal/style/ -v -run 'TestEval|TestBorderSide'`
 Expected: 编译失败（CellContext 未定义）。
 
-- [ ] **Step 3: 实现 `internal/style/context.go`**
+- [x] **Step 3: 实现 `internal/style/context.go`**
 
 ```go
 package style
@@ -1118,12 +1118,12 @@ func atFlag(at string, ctx *CellContext) bool {
 }
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `cd dynamic-report && go test ./internal/style/ -v`
 Expected: 全部 PASS。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/style && git commit -m "feat(style): CellContext, predicate evaluation and at-clause resolution"
@@ -1137,7 +1137,7 @@ git add internal/style && git commit -m "feat(style): CellContext, predicate eva
 - Create: `internal/style/engine.go`
 - Test: `internal/style/engine_test.go`
 
-- [ ] **Step 1: 写失败测试 `internal/style/engine_test.go`**
+- [x] **Step 1: 写失败测试 `internal/style/engine_test.go`**
 
 ```go
 package style
@@ -1210,12 +1210,12 @@ func TestResolveNoRules(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd dynamic-report && go test ./internal/style/ -v -run TestResolve`
 Expected: 编译失败（Engine/ResolvedStyle 未定义）。
 
-- [ ] **Step 3: 实现 `internal/style/engine.go`**
+- [x] **Step 3: 实现 `internal/style/engine.go`**
 
 ```go
 package style
@@ -1306,12 +1306,12 @@ func applySpec(out *ResolvedStyle, s *StyleSpec, ctx *CellContext) {
 }
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `cd dynamic-report && go test ./internal/style/ -v`
 Expected: 全部 PASS。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/style && git commit -m "feat(style): rule engine with priority merge and style interning key"
@@ -1323,7 +1323,7 @@ git add internal/style && git commit -m "feat(style): rule engine with priority 
 - Create: `internal/engine/aggregator.go`
 - Test: `internal/engine/aggregator_test.go`
 
-- [ ] **Step 1: 写失败测试 `internal/engine/aggregator_test.go`**
+- [x] **Step 1: 写失败测试 `internal/engine/aggregator_test.go`**
 
 ```go
 package engine
@@ -1387,12 +1387,12 @@ func TestAggMinMax(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd dynamic-report && go test ./internal/engine/ -v`
 Expected: 编译失败。
 
-- [ ] **Step 3: 实现 `internal/engine/aggregator.go`**
+- [x] **Step 3: 实现 `internal/engine/aggregator.go`**
 
 ```go
 package engine
@@ -1487,12 +1487,12 @@ func toFloat(v any) (float64, bool) {
 }
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `cd dynamic-report && go test ./internal/engine/ -v`
 Expected: 全部 PASS。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/engine && git commit -m "feat(engine): incremental aggregators for SUM/AVG/COUNT/MIN/MAX"
@@ -1507,7 +1507,7 @@ git add internal/engine && git commit -m "feat(engine): incremental aggregators 
 - Create: `internal/engine/groupstack.go`
 - Test: `internal/engine/groupstack_test.go`
 
-- [ ] **Step 1: 实现布局类型 `internal/engine/layout.go`（先建类型，供测试编译）**
+- [x] **Step 1: 实现布局类型 `internal/engine/layout.go`（先建类型，供测试编译）**
 
 ```go
 package engine
@@ -1562,7 +1562,7 @@ type Layout struct {
 }
 ```
 
-- [ ] **Step 2: 写失败测试 `internal/engine/groupstack_test.go`**
+- [x] **Step 2: 写失败测试 `internal/engine/groupstack_test.go`**
 
 ```go
 package engine
@@ -1696,12 +1696,12 @@ func TestGroupStackTotalTopShiftsRanges(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: 运行确认失败**
+- [x] **Step 3: 运行确认失败**
 
 Run: `cd dynamic-report && go test ./internal/engine/ -v -run TestGroupStack`
 Expected: 编译失败（GroupStack 未定义）。
 
-- [ ] **Step 4: 实现 `internal/engine/groupstack.go`**
+- [x] **Step 4: 实现 `internal/engine/groupstack.go`**
 
 ```go
 package engine
@@ -1868,12 +1868,12 @@ func (g *GroupStack) Finish() {
 }
 ```
 
-- [ ] **Step 5: 运行确认通过**
+- [x] **Step 5: 运行确认通过**
 
 Run: `cd dynamic-report && go test ./internal/engine/ -v`
 Expected: 全部 PASS。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add internal/engine && git commit -m "feat(engine): GroupStack rolling aggregation and layout materialization"
@@ -1887,7 +1887,7 @@ git add internal/engine && git commit -m "feat(engine): GroupStack rolling aggre
 - Create: `internal/engine/position.go`
 - Test: `internal/engine/position_test.go`
 
-- [ ] **Step 1: 写失败测试 `internal/engine/position_test.go`**
+- [x] **Step 1: 写失败测试 `internal/engine/position_test.go`**
 
 ```go
 package engine
@@ -1987,12 +1987,12 @@ func TestPositionPassZeroDimFlags(t *testing.T) {
 
 注意：`GroupFirstRow()` / `GroupLastRow()` 是 `LayoutRow` 上的便捷方法（下一步实现）。
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd dynamic-report && go test ./internal/engine/ -v -run 'TestPosition|TestDisplay'`
 Expected: 编译失败。
 
-- [ ] **Step 3: 实现 `internal/engine/position.go`**
+- [x] **Step 3: 实现 `internal/engine/position.go`**
 
 ```go
 package engine
@@ -2143,12 +2143,12 @@ func DisplayWidth(s string) int {
 
 （追加到 `LayoutRow` 末尾即可。）
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `cd dynamic-report && go test ./internal/engine/ -v`
 Expected: 全部 PASS。若 `TestPositionPassMergesAndFlags` 的 lcp 判定失败，检查 `pathOf` 对 subtotal 行的切片是否正确。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/engine && git commit -m "feat(engine): P1 position pass - spans, merges, flags, column widths"
@@ -2162,7 +2162,7 @@ git add internal/engine && git commit -m "feat(engine): P1 position pass - spans
 - Create: `internal/engine/assembly.go`
 - Test: `internal/engine/assembly_test.go`
 
-- [ ] **Step 1: 写失败测试 `internal/engine/assembly_test.go`**
+- [x] **Step 1: 写失败测试 `internal/engine/assembly_test.go`**
 
 ```go
 package engine
@@ -2214,12 +2214,12 @@ func TestAssemblyPassFillsFormulas(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd dynamic-report && go test ./internal/engine/ -v -run 'TestSubtotal|TestColumn|TestAssembly'`
 Expected: 编译失败。
 
-- [ ] **Step 3: 实现 `internal/engine/assembly.go`**
+- [x] **Step 3: 实现 `internal/engine/assembly.go`**
 
 ```go
 package engine
@@ -2276,12 +2276,12 @@ func AssemblyPass(def *model.ReportDefinition, l *Layout) {
 }
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `cd dynamic-report && go test ./internal/engine/ -v`
 Expected: 全部 PASS。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/engine && git commit -m "feat(engine): P3 assembly pass - SUBTOTAL formula generation"
@@ -2294,7 +2294,7 @@ git add internal/engine && git commit -m "feat(engine): P3 assembly pass - SUBTO
 - Test: `internal/datahub/source_test.go`
 - Create: `internal/datahub/testdata/sales.csv`
 
-- [ ] **Step 1: 写夹具 `internal/datahub/testdata/sales.csv`**
+- [x] **Step 1: 写夹具 `internal/datahub/testdata/sales.csv`**
 
 ```csv
 region,region_order,city,amount,qty
@@ -2306,7 +2306,7 @@ region,region_order,city,amount,qty
 
 （故意乱序：排序必须把 region 按 region_order 升序排成 华东→华北。）
 
-- [ ] **Step 2: 写失败测试 `internal/datahub/source_test.go`**
+- [x] **Step 2: 写失败测试 `internal/datahub/source_test.go`**
 
 ```go
 package datahub
@@ -2371,12 +2371,12 @@ func TestSliceSource(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: 运行确认失败**
+- [x] **Step 3: 运行确认失败**
 
 Run: `cd dynamic-report && go test ./internal/datahub/ -v`
 Expected: 编译失败。
 
-- [ ] **Step 4: 实现 `internal/datahub/source.go`**
+- [x] **Step 4: 实现 `internal/datahub/source.go`**
 
 ```go
 package datahub
@@ -2528,12 +2528,12 @@ func sortValue(def *model.ReportDefinition, dim model.DimensionDef, r engine.Det
 }
 ```
 
-- [ ] **Step 5: 运行确认通过**
+- [x] **Step 5: 运行确认通过**
 
 Run: `cd dynamic-report && go test ./internal/datahub/ -v`
 Expected: 全部 PASS。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add internal/datahub && git commit -m "feat(datahub): slice and csv sources with sort_key driven ordering"
@@ -2547,7 +2547,7 @@ git add internal/datahub && git commit -m "feat(datahub): slice and csv sources 
 - Create: `internal/schema/schema.go`
 - Test: `internal/schema/schema_test.go`
 
-- [ ] **Step 1: 写失败测试 `internal/schema/schema_test.go`**
+- [x] **Step 1: 写失败测试 `internal/schema/schema_test.go`**
 
 ```go
 package schema
@@ -2675,12 +2675,12 @@ func TestFormatDisplay(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd dynamic-report && go test ./internal/schema/ -v`
 Expected: 编译失败。
 
-- [ ] **Step 3: 实现 `internal/schema/schema.go`**
+- [x] **Step 3: 实现 `internal/schema/schema.go`**
 
 ```go
 package schema
@@ -2935,12 +2935,12 @@ func toFloat(v any) (float64, bool) {
 
 注意：`MergeInfo` 的 json tag 需补全为 `json:"r1"` `json:"r2"` `json:"c"`（上面为排版简写，实现时写完整）。
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `cd dynamic-report && go test ./internal/schema/ -v`
 Expected: 全部 PASS。若 zebra 行断言失败，先打印 `s.Rows[2]` 核对物理行与布局行的对应（布局 0 → 物理 2）。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/schema && git commit -m "feat(schema): RenderSchema builder with style dictionary and display formatting"
@@ -2954,7 +2954,7 @@ git add internal/schema && git commit -m "feat(schema): RenderSchema builder wit
 - Create: `internal/render/excel.go`
 - Test: `internal/render/excel_test.go`
 
-- [ ] **Step 1: 写失败测试 `internal/render/excel_test.go`**
+- [x] **Step 1: 写失败测试 `internal/render/excel_test.go`**
 
 ```go
 package render
@@ -3037,7 +3037,7 @@ func TestRenderRoundTrip(t *testing.T) {
 
 注意：本测试依赖 Task 14 的 `pipeline` 包；若按任务顺序执行，先完成 Task 14 Step 1（pipeline 实现）再跑本测试，或将两任务的实现步骤视为一组执行。
 
-- [ ] **Step 2: 实现 `internal/render/excel.go`**
+- [x] **Step 2: 实现 `internal/render/excel.go`**
 
 ```go
 package render
@@ -3212,12 +3212,12 @@ func ptrBool(b bool) *bool { return &b }
 
 说明：`toExcelStyle` 的入参结构即 `style.ResolvedStyle`；为避免 render 直接依赖 style 包的结构体字面量签名变化，实现时直接写 `st style.ResolvedStyle` 并 import style 包（上面为展示字段内联，落地时以 `style.ResolvedStyle` 为准）。条件格式注入（轨道 B）与打印设置依赖 spike V1/V3 结论，放在计划二随服务化落地；本任务不实现，避免未验证 API 进入关键路径。
 
-- [ ] **Step 3: 运行确认通过**
+- [x] **Step 3: 运行确认通过**
 
 Run: `cd dynamic-report && go test ./internal/render/ -v`
 Expected: PASS（依赖 pipeline 包，见 Task 14）。
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add internal/render && git commit -m "feat(render): excelize writer with styles, merges, freeze and column widths"
@@ -3233,7 +3233,7 @@ git add internal/render && git commit -m "feat(render): excelize writer with sty
 - Create: `testdata/e2e/sales.csv`
 - Create: `internal/pipeline/pipeline_test.go`
 
-- [ ] **Step 1: 实现 `internal/pipeline/pipeline.go`**
+- [x] **Step 1: 实现 `internal/pipeline/pipeline.go`**
 
 ```go
 package pipeline
@@ -3282,7 +3282,7 @@ func build(def *model.ReportDefinition, src datahub.Source, trace bool) (*schema
 
 （实现时补上 `"fmt"` import。）
 
-- [ ] **Step 2: 实现 `cmd/reportgen/main.go`**
+- [x] **Step 2: 实现 `cmd/reportgen/main.go`**
 
 ```go
 package main
@@ -3347,7 +3347,7 @@ func run(defPath, dataPath, out, schemaOut string) error {
 
 （实现时补上 `"encoding/json"` import。）
 
-- [ ] **Step 3: 写端到端夹具与测试**
+- [x] **Step 3: 写端到端夹具与测试**
 
 `testdata/e2e/sales.csv`：复制 `internal/datahub/testdata/sales.csv` 内容。
 
@@ -3394,12 +3394,12 @@ func TestBuildReportRowCapRejects(t *testing.T) {
 }
 ```
 
-- [ ] **Step 4: 运行全部测试**
+- [x] **Step 4: 运行全部测试**
 
 Run: `cd dynamic-report && go test ./... -v`
 Expected: 全部 PASS。
 
-- [ ] **Step 5: 手工验证 CLI 产物**
+- [x] **Step 5: 手工验证 CLI 产物**
 
 ```bash
 cd dynamic-report && go run ./cmd/reportgen -def internal/model/testdata/valid.json \
@@ -3408,7 +3408,7 @@ cd dynamic-report && go run ./cmd/reportgen -def internal/model/testdata/valid.j
 
 Expected: 输出 `written: /tmp/smoke.xlsx (10 rows)`；用 excelize 或 Excel 打开，确认分组缩进、合并、小计公式。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add internal/pipeline cmd testdata && git commit -m "feat: pipeline assembly and reportgen CLI with e2e tests"

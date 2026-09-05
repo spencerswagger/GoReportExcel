@@ -70,7 +70,7 @@ dynamic-report/
 - Create: `internal/model/stylepatches.go`（镜像样式结构，不 import style）
 - Modify: `internal/model/model_test.go`
 
-- [ ] **Step 1: 写失败测试（追加到 model_test.go）**
+- [x] **Step 1: 写失败测试（追加到 model_test.go）**
 
 ```go
 func TestValidateRejectsOverrideBadRowType(t *testing.T) {
@@ -122,12 +122,12 @@ func TestPrintOptsValidation(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd /workspace/dynamic-report && go test ./internal/model/ -run 'TestValidateRejects|TestPrintOpts'`
 Expected: 编译失败（类型未定义）。
 
-- [ ] **Step 3: 创建 `internal/model/stylepatches.go`**
+- [x] **Step 3: 创建 `internal/model/stylepatches.go`**
 
 ```go
 package model
@@ -168,7 +168,7 @@ type StylePatchJSON struct {
 }
 ```
 
-- [ ] **Step 4: 修改 `internal/model/model.go`，追加类型与校验**
+- [x] **Step 4: 修改 `internal/model/model.go`，追加类型与校验**
 
 ```go
 // 追加到 LayoutOpts：
@@ -257,12 +257,12 @@ Validate() 追加规则（放在既有校验后）：
 	}
 ```
 
-- [ ] **Step 5: 运行确认通过**
+- [x] **Step 5: 运行确认通过**
 
 Run: `cd /workspace/dynamic-report && go test ./internal/model/ -v`
 Expected: 全部 PASS（含 4 个新测试）。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 cd /workspace && git add dynamic-report/internal/model && git commit -m "feat(model): overrides, conditional formats, print options with validation"
@@ -276,13 +276,13 @@ cd /workspace && git add dynamic-report/internal/model && git commit -m "feat(mo
 - Create: `internal/catalog/store.go`
 - Test: `internal/catalog/store_test.go`
 
-- [ ] **Step 1: 安装 SQLite 驱动**
+- [x] **Step 1: 安装 SQLite 驱动**
 
 ```bash
 cd /workspace/dynamic-report && go get modernc.org/sqlite@latest
 ```
 
-- [ ] **Step 2: 写失败测试 `internal/catalog/store_test.go`**
+- [x] **Step 2: 写失败测试 `internal/catalog/store_test.go`**
 
 ```go
 package catalog
@@ -438,12 +438,12 @@ func TestStoreDiffSummary(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: 运行确认失败**
+- [x] **Step 3: 运行确认失败**
 
 Run: `cd /workspace/dynamic-report && go test ./internal/catalog/ -v`
 Expected: 编译失败（Store 未定义）。
 
-- [ ] **Step 4: 实现 `internal/catalog/store.go`**
+- [x] **Step 4: 实现 `internal/catalog/store.go`**
 
 ```go
 package catalog
@@ -689,12 +689,12 @@ func sortVersions(vs []VersionInfo) {
 
 注意：`sortVersions` 为辅助函数，若未被使用会被 `go vet` 忽略但不被编译器报错（未使用的函数不报错）；本测试未用，可保留或删除。
 
-- [ ] **Step 5: 运行确认通过**
+- [x] **Step 5: 运行确认通过**
 
 Run: `cd /workspace/dynamic-report && go test ./internal/catalog/ -v`
 Expected: 6 个测试全部 PASS。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 cd /workspace && git add dynamic-report/internal/catalog dynamic-report/go.mod dynamic-report/go.sum && git commit -m "feat(catalog): sqlite definition store with versioning, publish, rollback"
@@ -708,7 +708,7 @@ cd /workspace && git add dynamic-report/internal/catalog dynamic-report/go.mod d
 - Create: `internal/catalog/cache.go`
 - Test: `internal/catalog/cache_test.go`
 
-- [ ] **Step 1: 写失败测试 `internal/catalog/cache_test.go`**
+- [x] **Step 1: 写失败测试 `internal/catalog/cache_test.go`**
 
 ```go
 package catalog
@@ -812,12 +812,12 @@ func TestCacheConcurrentSafe(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd /workspace/dynamic-report && go test ./internal/catalog/ -v`
 Expected: 编译失败（Cache 未定义）。
 
-- [ ] **Step 3: 实现 `internal/catalog/cache.go`**
+- [x] **Step 3: 实现 `internal/catalog/cache.go`**
 
 ```go
 package catalog
@@ -950,12 +950,12 @@ func unmarshalDef(payload string) (*model.ReportDefinition, error) {
 }
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `cd /workspace/dynamic-report && go test ./internal/catalog/ -v`
 Expected: 全部 PASS（含 Task 2 的 6 个 + 本任务 4 个）。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 cd /workspace && git add dynamic-report/internal/catalog && git commit -m "feat(catalog): in-process cache with invalidation, notifications and TTL refresh"
@@ -967,7 +967,7 @@ cd /workspace && git add dynamic-report/internal/catalog && git commit -m "feat(
 - Create: `internal/pipeline/overrides.go`
 - Test: `internal/pipeline/overrides_test.go`
 
-- [ ] **Step 1: 写失败测试 `internal/pipeline/overrides_test.go`**
+- [x] **Step 1: 写失败测试 `internal/pipeline/overrides_test.go`**
 
 ```go
 package pipeline
@@ -1078,12 +1078,12 @@ func TestCompileOverridesBadPatch(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd /workspace/dynamic-report && go test ./internal/pipeline/ -v`
 Expected: 编译失败（CompileOverrides 未定义）。
 
-- [ ] **Step 3: 实现 `internal/pipeline/overrides.go`**
+- [x] **Step 3: 实现 `internal/pipeline/overrides.go`**
 
 ```go
 package pipeline
@@ -1161,7 +1161,7 @@ func stylePatchToSpec(patch model.StylePatchJSON) (style.StyleSpec, error) {
 }
 ```
 
-- [ ] **Step 4: 修改 `internal/pipeline/pipeline.go` 的 build()：把 override 规则追加进引擎**
+- [x] **Step 4: 修改 `internal/pipeline/pipeline.go` 的 build()：把 override 规则追加进引擎**
 
 找到 `build()` 中的：
 
@@ -1188,12 +1188,12 @@ func stylePatchToSpec(patch model.StylePatchJSON) (style.StyleSpec, error) {
 	return schema.Build(def, l, style.NewEngine(&style.RulesDoc{Rules: allRules}), trace)
 ```
 
-- [ ] **Step 5: 运行确认通过**
+- [x] **Step 5: 运行确认通过**
 
 Run: `cd /workspace/dynamic-report && go test ./internal/pipeline/ -v`
 Expected: 全部 PASS（含 4 个新测试 + 既有 2 个）。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 cd /workspace && git add dynamic-report/internal/pipeline && git commit -m "feat(pipeline): compile semantic overrides into highest-priority style rules"
@@ -1207,7 +1207,7 @@ cd /workspace && git add dynamic-report/internal/pipeline && git commit -m "feat
 - Create: `internal/style/explain.go`
 - Test: `internal/style/explain_test.go`
 
-- [ ] **Step 1: 写失败测试 `internal/style/explain_test.go`**
+- [x] **Step 1: 写失败测试 `internal/style/explain_test.go`**
 
 ```go
 package style
@@ -1274,12 +1274,12 @@ func TestResolveTraced(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd /workspace/dynamic-report && go test ./internal/style/ -v -run 'TestExplain|TestResolveTraced'`
 Expected: 编译失败。
 
-- [ ] **Step 3: 实现 `internal/style/explain.go`**
+- [x] **Step 3: 实现 `internal/style/explain.go`**
 
 ```go
 package style
@@ -1367,12 +1367,12 @@ func explainLeaf(c *Cond) string {
 }
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `cd /workspace/dynamic-report && go test ./internal/style/ -v`
 Expected: 全部 PASS。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 cd /workspace && git add dynamic-report/internal/style && git commit -m "feat(style): traced resolve with natural-language rule explanations"
@@ -1387,7 +1387,7 @@ cd /workspace && git add dynamic-report/internal/style && git commit -m "feat(st
 - Modify: `internal/engine/groupstack.go`（采集明细行号与抽样）
 - Test: `internal/engine/trace_test.go`
 
-- [ ] **Step 1: 修改 `internal/engine/layout.go`，追加类型与字段**
+- [x] **Step 1: 修改 `internal/engine/layout.go`，追加类型与字段**
 
 在 `LayoutCell` 结构体末尾追加：
 
@@ -1414,7 +1414,7 @@ type CellTrace struct {
 	RowNo int // 明细序号（1-based，数据源按读取顺序编号）
 ```
 
-- [ ] **Step 2: 修改 `internal/engine/groupstack.go`**
+- [x] **Step 2: 修改 `internal/engine/groupstack.go`**
 
 在 `groupState` 结构体追加：
 
@@ -1493,7 +1493,7 @@ func (g *GroupStack) attachDetailTrace(cells []LayoutCell, rowNo int) []LayoutCe
 		Trace: &CellTrace{SourceCount: g.rootDetailCount, SampleRows: append([]int(nil), g.rootSamples...)},
 ```
 
-- [ ] **Step 3: 写失败测试 `internal/engine/trace_test.go`**
+- [x] **Step 3: 写失败测试 `internal/engine/trace_test.go`**
 
 ```go
 package engine
@@ -1555,17 +1555,17 @@ func TestTraceSampleCap(t *testing.T) {
 }
 ```
 
-- [ ] **Step 4: 运行确认失败**
+- [x] **Step 4: 运行确认失败**
 
 Run: `cd /workspace/dynamic-report && go test ./internal/engine/ -v -run TestTrace`
 Expected: 编译失败或不满足断言（先编译失败：Trace 字段未定义/DetailRow.RowNo 未定义）。
 
-- [ ] **Step 5: 运行确认通过**
+- [x] **Step 5: 运行确认通过**
 
 Run: `cd /workspace/dynamic-report && go test ./internal/engine/ -v`
 Expected: 全部 PASS（既有 + 新增 2 个）。若既有 DataRow 构造处缺 RowNo 不影响（零值即 0，采样会记录 0——可接受，测试均显式给 RowNo）。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 cd /workspace && git add dynamic-report/internal/engine && git commit -m "feat(engine): collect data lineage traces (count + capped samples) during aggregation"
@@ -1578,7 +1578,7 @@ cd /workspace && git add dynamic-report/internal/engine && git commit -m "feat(e
 - Modify: `internal/schema/schema_test.go`
 - Create: `internal/model/testdata/overrides_test.json`（带 override 与条件格式的定义夹具）
 
-- [ ] **Step 1: 创建夹具 `internal/model/testdata/overrides_test.json`**
+- [x] **Step 1: 创建夹具 `internal/model/testdata/overrides_test.json`**
 
 在 `internal/model/testdata/valid.json` 基础上追加：
 
@@ -1632,7 +1632,7 @@ cd /workspace && git add dynamic-report/internal/engine && git commit -m "feat(e
 
 （注意：此夹具的 style_rules 已含 zebra，供 schema 测试直接复用。）
 
-- [ ] **Step 2: 写失败测试（追加到 schema_test.go）**
+- [x] **Step 2: 写失败测试（追加到 schema_test.go）**
 
 ```go
 func TestBuildSchemaConditionalFormatsAndPrint(t *testing.T) {
@@ -1746,12 +1746,12 @@ func TestPageRows(t *testing.T) {
 
 注意：`TestBuildSchemaOverrideInRuleHits` 为占位（override 端到端在 Task 10/11 的 pipeline/service 层覆盖）。若团队希望 schema 层也验证，可改用 `buildSample` + 手工构造 `style.RulesDoc` 含 override 伪规则后断言 RuleHits 含 `override:` 前缀。
 
-- [ ] **Step 3: 运行确认失败**
+- [x] **Step 3: 运行确认失败**
 
 Run: `cd /workspace/dynamic-report && go test ./internal/schema/ -v`
 Expected: 编译失败（CFInfo/PageSetup/Explains/PageRows 未定义）。
 
-- [ ] **Step 4: 修改 `internal/schema/schema.go`**
+- [x] **Step 4: 修改 `internal/schema/schema.go`**
 
 新增类型与字段：
 
@@ -1955,12 +1955,12 @@ func toTraceDTO(t *engine.CellTrace) *CellTraceDTO {
 
 对应 CellDTO 构造处追加：`Explains: explains, Trace: toTraceDTO(cell.Trace),`（保持既有 RuleHits 逻辑：trace 时仍由 explains 承载，rule_hits 可由调用方从 explains 提取——为兼容既有前端契约保留 RuleHits 输出：在 traced 分支把 explains 的 ID 列表也填入 RuleHits）。
 
-- [ ] **Step 5: 运行确认通过**
+- [x] **Step 5: 运行确认通过**
 
 Run: `cd /workspace/dynamic-report && go test ./internal/schema/ -v`
 Expected: 全部 PASS（既有 6 个 + 新增 4 个）。若 top_n 条数与推演不符（城市组 3 个 + 全员单行组退化），核对 `l.Merges` 中 `DimDepth==ndim-1` 的条目数。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 cd /workspace && git add dynamic-report/internal/schema dynamic-report/internal/model/testdata && git commit -m "feat(schema): conditional formats expansion, page setup, traced explains and paging"
@@ -1974,7 +1974,7 @@ cd /workspace && git add dynamic-report/internal/schema dynamic-report/internal/
 - Modify: `internal/render/excel.go`
 - Modify: `internal/render/excel_test.go`
 
-- [ ] **Step 1: 写失败测试（追加到 excel_test.go）**
+- [x] **Step 1: 写失败测试（追加到 excel_test.go）**
 
 ```go
 func TestRenderConditionalFormatsAndPrint(t *testing.T) {
@@ -2016,12 +2016,12 @@ func TestRenderConditionalFormatsAndPrint(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd /workspace/dynamic-report && go test ./internal/render/ -v -run TestRenderConditional`
 Expected: 失败（sheet xml 无 conditionalFormatting）。
 
-- [ ] **Step 3: 修改 `internal/render/excel.go`**
+- [x] **Step 3: 修改 `internal/render/excel.go`**
 
 在 `Render` 中合并单元格步骤之后、冻结窗格之前插入：
 
@@ -2124,12 +2124,12 @@ func applyPageSetup(f *excelize.File, sheet string, ps *schema.PageSetupInfo) er
 
 需要 import 依赖 `schema.CFInfo`、`excelize`（已有）。注意 `excelize.PageLayoutOptions` 的字段名（v2.9.0：`Orientation *string`、`FitToWidth *int`）；若签名不同按编译错误调整并记录。
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `cd /workspace/dynamic-report && go test ./internal/render/ -v`
 Expected: 全部 PASS。若 `GetSheetXML` 为空或 `conditionalFormatting` 不在 sheet1，检查 `f.GetSheetList()` 名称（"Sheet1"）与条件格式注入顺序。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 cd /workspace && git add dynamic-report/internal/render && git commit -m "feat(render): conditional format injection (merged per range) and print setup"
@@ -2143,7 +2143,7 @@ cd /workspace && git add dynamic-report/internal/render && git commit -m "feat(r
 - Create: `internal/datahub/db.go`
 - Test: `internal/datahub/db_test.go`
 
-- [ ] **Step 1: 写失败测试 `internal/datahub/db_test.go`**
+- [x] **Step 1: 写失败测试 `internal/datahub/db_test.go`**
 
 ```go
 package datahub
@@ -2211,12 +2211,12 @@ func TestDBSourceRejectsBadFields(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd /workspace/dynamic-report && go test ./internal/datahub/ -v`
 Expected: 编译失败。
 
-- [ ] **Step 3: 实现 `internal/datahub/db.go`**
+- [x] **Step 3: 实现 `internal/datahub/db.go`**
 
 ```go
 package datahub
@@ -2327,12 +2327,12 @@ func normalized(v any) any {
 
 注意：`toDetailRow` 需要给 `Values` 中多出的 sort_key 列保留（`toDetailRow` 透传 raw，天然保留）。`DBSource` 的列白名单校验在拼接前已保证列名安全。
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `cd /workspace/dynamic-report && go test ./internal/datahub/ -v`
 Expected: 全部 PASS（含 2 个新测试）。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 cd /workspace && git add dynamic-report/internal/datahub && git commit -m "feat(datahub): sql source with ORDER BY pushdown and column whitelist"
@@ -2345,7 +2345,7 @@ cd /workspace && git add dynamic-report/internal/datahub && git commit -m "feat(
 - Create: `internal/orchestrator/export.go`
 - Test: `internal/orchestrator/export_test.go`
 
-- [ ] **Step 1: 写失败测试 `internal/orchestrator/export_test.go`**
+- [x] **Step 1: 写失败测试 `internal/orchestrator/export_test.go`**
 
 ```go
 package orchestrator
@@ -2496,12 +2496,12 @@ func (s *SinkFunc) OnProgress(taskID string, state State, progress float64) {
 
 注意：测试聚焦 Submit 幂等键去重、并发槽限制、产物落盘、进度递增四个行为；不依赖 catalog（定义以内联 JSON 传入）。若并发测试时序不稳定（worker 启动竞态），可把两个任务用不同 ArtifactName 提交并轮询完成。
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd /workspace/dynamic-report && go test ./internal/orchestrator/ -v`
 Expected: 编译失败。
 
-- [ ] **Step 3: 实现 `internal/orchestrator/queue.go`**
+- [x] **Step 3: 实现 `internal/orchestrator/queue.go`**
 
 ```go
 package orchestrator
@@ -2690,7 +2690,7 @@ func (o *Orchestrator) setStatus(id string, s State, p float64) {
 
 注意：`o.started` 字段需要在 `Orchestrator` 结构体追加（`started bool`），`execute` 在 export.go 实现。`ArtifactPath` 由 execute 填写。
 
-- [ ] **Step 4: 实现 `internal/orchestrator/export.go`**
+- [x] **Step 4: 实现 `internal/orchestrator/export.go`**
 
 ```go
 func (o *Orchestrator) execute(ent *taskEntry) error {
@@ -2743,12 +2743,12 @@ func ParseDefinition(jsonStr string) (*ReportDefinition, error) {
 
 （同时把 `Load` 改为调用 `ParseDefinition(string(data))` 消除重复，保持行为一致——原版 `Load` 的错误包装 "parse definition %s" 保留在 Load 内。）
 
-- [ ] **Step 5: 运行确认通过**
+- [x] **Step 5: 运行确认通过**
 
 Run: `cd /workspace/dynamic-report && go test ./internal/orchestrator/ -v`
 Expected: 全部 PASS。若并发测试时序不稳（worker 启动竞态），把两个任务用不同 ArtifactName 提交并轮询完成。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 cd /workspace && git add dynamic-report/internal/orchestrator dynamic-report/internal/model && git commit -m "feat(orchestrator): async export queue with idempotency, concurrency limit and progress"
@@ -2762,7 +2762,7 @@ cd /workspace && git add dynamic-report/internal/orchestrator dynamic-report/int
 - Create: `internal/httpapi/server.go`
 - Test: `internal/httpapi/server_test.go`
 
-- [ ] **Step 1: 写失败测试 `internal/httpapi/server_test.go`**
+- [x] **Step 1: 写失败测试 `internal/httpapi/server_test.go`**
 
 ```go
 package httpapi
@@ -2893,12 +2893,12 @@ func validDefJSON() string {
 }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd /workspace/dynamic-report && go test ./internal/httpapi/ -v`
 Expected: 编译失败。
 
-- [ ] **Step 3: 实现 `internal/httpapi/server.go`**
+- [x] **Step 3: 实现 `internal/httpapi/server.go`**
 
 ```go
 package httpapi
@@ -3329,12 +3329,12 @@ func (s *Server) exportDownload(w http.ResponseWriter, r *http.Request) {
 func (t TaskStatus) ArtifactPathName() string { return filepath.Base(t.ArtifactPath) }
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `cd /workspace/dynamic-report && go test ./internal/httpapi/ -v`
 Expected: 全部 PASS。若 `Server` 构造过于繁琐（vs 测试中 dataSources 为空 map），可让 `dsf` 调用返回"unknown source"错误——测试只验证路由存在与定义生命周期，不真渲染。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 cd /workspace && git add dynamic-report/internal/httpapi dynamic-report/internal/catalog && git commit -m "feat(httpapi): definition lifecycle, render preview, style explain, data trace, override patch, export endpoints"
@@ -3348,7 +3348,7 @@ cd /workspace && git add dynamic-report/internal/httpapi dynamic-report/internal
 - Create: `cmd/reportserv/main.go`
 - Modify: `dynamic-report/testdata/`（若需要）
 
-- [ ] **Step 1: 实现 `cmd/reportserv/main.go`**
+- [x] **Step 1: 实现 `cmd/reportserv/main.go`**
 
 ```go
 package main
@@ -3409,7 +3409,7 @@ func main() {
 }
 ```
 
-- [ ] **Step 2: 端到端冒烟（手工验证脚本）**
+- [x] **Step 2: 端到端冒烟（手工验证脚本）**
 
 ```bash
 cd /workspace/dynamic-report && go build -o /tmp/reportserv ./cmd/reportserv
@@ -3434,12 +3434,12 @@ ls -la out.xlsx
 
 预期：返回 200、`report.xlsx` 可被 excelize/Excel 打开，含小计与合并。冒烟成功后 kill 服务进程。
 
-- [ ] **Step 3: 全量测试**
+- [x] **Step 3: 全量测试**
 
 Run: `cd /workspace/dynamic-report && go test ./... -v -count=1 && go vet ./... && gofmt -l internal/ cmd/`
 Expected: 全部 PASS、vet 干净、无未格式化文件。
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 cd /workspace && git add cmd/reportserv && git commit -m "feat(cmd): reportserv service assembly with csv source and artifact dir"

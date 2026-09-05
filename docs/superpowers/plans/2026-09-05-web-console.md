@@ -79,7 +79,7 @@ web/
 **Files:**
 - Create: `package.json`、`vite.config.ts`、`vitest.config.ts`、`tsconfig.json`、`tsconfig.node.json`、`index.html`、`src/main.tsx`、`src/App.tsx`
 
-- [ ] **Step 1: 初始化与安装依赖**
+- [x] **Step 1: 初始化与安装依赖**
 
 ```bash
 cd /workspace && mkdir -p web/src && cd web
@@ -88,7 +88,7 @@ npm install react@^18 react-dom@^18 react-router-dom@^6 antd@^5 zustand @tanstac
 npm install -D vite@^5 @vitejs/plugin-react typescript@^5 vitest @testing-library/react @testing-library/dom @testing-library/user-event @types/react @types/react-dom jsdom msw@^2
 ```
 
-- [ ] **Step 2: 创建配置文件**
+- [x] **Step 2: 创建配置文件**
 
 `package.json` 关键字段（编辑生成的文件）：
 
@@ -180,7 +180,7 @@ export default function App() {
 }
 ```
 
-- [ ] **Step 3: 写冒烟测试 `src/App.test.tsx`**
+- [x] **Step 3: 写冒烟测试 `src/App.test.tsx`**
 
 ```tsx
 import { render, screen } from '@testing-library/react';
@@ -193,7 +193,7 @@ test('renders shell', () => {
 });
 ```
 
-- [ ] **Step 4: 运行测试**
+- [x] **Step 4: 运行测试**
 
 Run: `cd /workspace/web && npm test`
 Expected: 1 个用例 PASS（`npm test` 非零退出前先保证 `tsc` 无错；如 jsdom 环境缺 `matchMedia`，在 `test-setup.ts` 补 antd 常用 polyfill：`window.matchMedia` mock）。
@@ -214,7 +214,7 @@ Object.defineProperty(window, 'matchMedia', {
 afterEach(() => cleanup());
 ```
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 cd /workspace && git add web && git commit -m "feat(web): scaffold vite react ts with vitest and antd"
@@ -228,7 +228,7 @@ cd /workspace && git add web && git commit -m "feat(web): scaffold vite react ts
 - Create: `src/api/types.ts`、`src/api/client.ts`、`src/api/mock.ts`、`src/api/client.test.ts`
 - Modify: `src/test-setup.ts`（MSW 自动启动）
 
-- [ ] **Step 1: 写失败测试 `src/api/client.test.ts`**
+- [x] **Step 1: 写失败测试 `src/api/client.test.ts`**
 
 ```ts
 import { describe, expect, it } from 'vitest';
@@ -265,7 +265,7 @@ describe('api client', () => {
 });
 ```
 
-- [ ] **Step 2: 实现 `src/api/types.ts`**
+- [x] **Step 2: 实现 `src/api/types.ts`**
 
 ```ts
 export interface ColInfo {
@@ -377,7 +377,7 @@ export interface TraceResult {
 }
 ```
 
-- [ ] **Step 3: 实现 `src/api/client.ts`**
+- [x] **Step 3: 实现 `src/api/client.ts`**
 
 ```ts
 import type {
@@ -467,7 +467,7 @@ export function exportDownloadUrl(taskId: string) {
 }
 ```
 
-- [ ] **Step 4: 实现 `src/api/mock.ts`（MSW 单例 + fixture）**
+- [x] **Step 4: 实现 `src/api/mock.ts`（MSW 单例 + fixture）**
 
 ```ts
 import { setupWorker } from 'msw/browser';
@@ -578,7 +578,7 @@ export function enableMocking() {
 }
 ```
 
-- [ ] **Step 5: 修改 `src/test-setup.ts` 启动 MSW**
+- [x] **Step 5: 修改 `src/test-setup.ts` 启动 MSW**
 
 ```ts
 import { cleanup } from '@testing-library/react';
@@ -592,7 +592,7 @@ afterEach(() => { cleanup(); server.resetHandlers(); });
 afterAll(() => server.close());
 ```
 
-- [ ] **Step 6: 运行测试**
+- [x] **Step 6: 运行测试**
 
 Run: `cd /workspace/web && npm test`
 Expected: App 冒烟 1 个 + client 4 个，全部 PASS。若 `server.use` 覆盖 409 用例遇到 handler 顺序问题（mock 的 PUT 不返回 409），把 PUT handler 改为从请求体解析：version 为 1 时返回 409：
@@ -610,7 +610,7 @@ http.put('*/api/v1/definitions/:id/draft', async ({ request }) => {
 
 （上面的 handler 已按此实现——保持现状即可，但请确认 client 测试 409 用例断言消息含 "409"。）
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 cd /workspace && git add web && git commit -m "feat(web): api client types with msw mock and contract tests"
@@ -623,7 +623,7 @@ cd /workspace && git add web && git commit -m "feat(web): api client types with 
 - Create: `src/pages/ReportList.test.tsx`
 - Modify: `src/App.tsx`（接入 Router 与路由表）
 
-- [ ] **Step 1: 写失败测试 `src/pages/ReportList.test.tsx`**
+- [x] **Step 1: 写失败测试 `src/pages/ReportList.test.tsx`**
 
 ```tsx
 import { render, screen } from '@testing-library/react';
@@ -641,7 +641,7 @@ test('renders list header and new-entry button', () => {
 });
 ```
 
-- [ ] **Step 2: 实现 `src/pages/ReportList.tsx`**
+- [x] **Step 2: 实现 `src/pages/ReportList.tsx`**
 
 ```tsx
 import { Button, Card, List, Typography } from 'antd';
@@ -673,7 +673,7 @@ export default function ReportList() {
 }
 ```
 
-- [ ] **Step 3: 修改 `src/App.tsx` 接入路由**
+- [x] **Step 3: 修改 `src/App.tsx` 接入路由**
 
 ```tsx
 import { Layout } from 'antd';
@@ -707,12 +707,12 @@ export default function EditorLayout() {
 }
 ```
 
-- [ ] **Step 4: 运行测试**
+- [x] **Step 4: 运行测试**
 
 Run: `cd /workspace/web && npm test`
 Expected: 全部 PASS（列表页 1 个 + 既有）。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 cd /workspace && git add web && git commit -m "feat(web): router with report list page"
@@ -726,7 +726,7 @@ cd /workspace && git add web && git commit -m "feat(web): router with report lis
 - Create: `src/store/editor.ts`
 - Test: `src/store/editor.test.ts`
 
-- [ ] **Step 1: 写失败测试 `src/store/editor.test.ts`**
+- [x] **Step 1: 写失败测试 `src/store/editor.test.ts`**
 
 ```ts
 import { describe, expect, it } from 'vitest';
@@ -794,12 +794,12 @@ describe('editor store', () => {
 });
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd /workspace/web && npm test`
 Expected: 编译失败（useEditorStore 未定义）。
 
-- [ ] **Step 3: 实现 `src/store/editor.ts`**
+- [x] **Step 3: 实现 `src/store/editor.ts`**
 
 ```ts
 import { create } from 'zustand';
@@ -895,12 +895,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 }));
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `cd /workspace/web && npm test`
 Expected: 6 个用例全部 PASS。
 
-- [ ] **Step 5: 连接 EditorLayout 加载草稿（占位替换为真实加载）**
+- [x] **Step 5: 连接 EditorLayout 加载草稿（占位替换为真实加载）**
 
 把 `src/editor/EditorLayout.tsx` 替换为三栏骨架（含数据加载与 store 联动；画布/面板在后续任务实现，先放占位区域）：
 
@@ -952,7 +952,7 @@ export default function EditorLayout() {
 }
 ```
 
-- [ ] **Step 6: 运行测试并提交**
+- [x] **Step 6: 运行测试并提交**
 
 Run: `cd /workspace/web && npm test`
 Expected: 全部 PASS。
@@ -970,7 +970,7 @@ cd /workspace && git add web && git commit -m "feat(web): editor store with draf
 - Create: `src/editor/PreviewCanvas.tsx`
 - Create: `src/editor/PreviewCanvas.test.tsx`
 
-- [ ] **Step 1: 写失败测试 `src/editor/StyleSheet.test.ts`**
+- [x] **Step 1: 写失败测试 `src/editor/StyleSheet.test.ts`**
 
 ```ts
 import { describe, expect, it } from 'vitest';
@@ -1002,12 +1002,12 @@ describe('StyleSheet', () => {
 });
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd /workspace/web && npm test`
 Expected: 编译失败。
 
-- [ ] **Step 3: 实现 `src/editor/StyleSheet.ts`**
+- [x] **Step 3: 实现 `src/editor/StyleSheet.ts`**
 
 ```ts
 import type { ResolvedStyle } from '../api/types';
@@ -1043,7 +1043,7 @@ export function styleSheetCSS(styles: Record<string, ResolvedStyle>): string {
 }
 ```
 
-- [ ] **Step 4: 写失败测试 `src/editor/PreviewCanvas.test.tsx`**
+- [x] **Step 4: 写失败测试 `src/editor/PreviewCanvas.test.tsx`**
 
 ```tsx
 import { render, screen } from '@testing-library/react';
@@ -1065,7 +1065,7 @@ test('emits style tags from schema dict', () => {
 });
 ```
 
-- [ ] **Step 5: 实现 `src/editor/PreviewCanvas.tsx`**
+- [x] **Step 5: 实现 `src/editor/PreviewCanvas.tsx`**
 
 ```tsx
 import { useMemo } from 'react';
@@ -1157,12 +1157,12 @@ function MergeCell({ cell, selected, onSelect, rowSpan }: {
 
 说明：预览以 `<table>` 实现（语义清晰、便于测试断言文本）；合并用 `rowSpan`（当前版本把"同列连续组"按后端 merges 的首行锚点展开）；虚拟滚动在 Task 6 的集成中叠加（画布外层用 `@tanstack/react-virtual` 替换直接 map——本任务先确保渲染正确，虚拟化单独提交）。
 
-- [ ] **Step 6: 运行确认通过**
+- [x] **Step 6: 运行确认通过**
 
 Run: `cd /workspace/web && npm test`
 Expected: 全部 PASS。
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 cd /workspace && git add web && git commit -m "feat(web): preview canvas with style dictionary css and merged cells"
@@ -1177,7 +1177,7 @@ cd /workspace && git add web && git commit -m "feat(web): preview canvas with st
 - Create: `src/editor/conditional.test.ts`
 - Modify: `src/editor/PreviewCanvas.tsx`（虚拟滚动接入）
 
-- [ ] **Step 1: 写失败测试 `src/editor/conditional.test.ts`**
+- [x] **Step 1: 写失败测试 `src/editor/conditional.test.ts`**
 
 ```ts
 import { describe, expect, it } from 'vitest';
@@ -1215,12 +1215,12 @@ describe('conditional format simulation', () => {
 });
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd /workspace/web && npm test`
 Expected: 编译失败。
 
-- [ ] **Step 3: 实现 `src/editor/conditional.ts`**
+- [x] **Step 3: 实现 `src/editor/conditional.ts`**
 
 ```ts
 import type { CFInfo, CellDTO } from '../api/types';
@@ -1309,7 +1309,7 @@ export function applyConditional(rows: CellDTO[][], cf: CFInfo, metricCol: numbe
 }
 ```
 
-- [ ] **Step 4: 虚拟滚动接入 `PreviewCanvas.tsx`**
+- [x] **Step 4: 虚拟滚动接入 `PreviewCanvas.tsx`**
 
 把 `schema.rows.map(...)` 替换为 `@tanstack/react-virtual` 的窗口渲染（表头行始终固定在首行；body 行按视口窗口化）：
 
@@ -1366,12 +1366,12 @@ function cellLabel(schema: RenderSchema, col: number) {
 }
 ```
 
-- [ ] **Step 5: 运行测试**
+- [x] **Step 5: 运行测试**
 
 Run: `cd /workspace/web && npm test`
 Expected: 全部 PASS（conditional 3 个 + PreviewCanvas 既有测试在虚拟滚动改造后仍通过——若断言依赖 table 标签导致失败，把 PreviewCanvas 测试的断言改为按文本查询而非 table 结构）。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 cd /workspace && git add web && git commit -m "feat(web): virtualized canvas rows and conditional format simulation"
@@ -1384,7 +1384,7 @@ cd /workspace && git add web && git commit -m "feat(web): virtualized canvas row
 - Create: `src/panels/MetricsPanel.tsx`
 - Create: `src/panels/panels.test.tsx`
 
-- [ ] **Step 1: 写失败测试 `src/panels/panels.test.tsx`**
+- [x] **Step 1: 写失败测试 `src/panels/panels.test.tsx`**
 
 ```tsx
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -1448,16 +1448,16 @@ test('MetricsPanel shows agg type and swap toggles', () => {
 
 注意：`DraftShape` 类型定义在 `src/store/editor.ts` 中未导出——需要把它导出（把 `interface DraftShape` 改为 `export interface DraftShape`），并在测试中 import。
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd /workspace/web && npm test`
 Expected: 编译失败（DimensionsPanel/MetricsPanel 未定义；DraftShape 未导出）。
 
-- [ ] **Step 3: 修改 `src/store/editor.ts` 导出 DraftShape**
+- [x] **Step 3: 修改 `src/store/editor.ts` 导出 DraftShape**
 
 把 `interface DraftShape {` 改为 `export interface DraftShape {`。
 
-- [ ] **Step 4: 实现 `src/panels/DimensionsPanel.tsx`**
+- [x] **Step 4: 实现 `src/panels/DimensionsPanel.tsx`**
 
 ```tsx
 import { useCallback, useEffect, useState } from 'react';
@@ -1536,7 +1536,7 @@ export function DimensionsPanel() {
 }
 ```
 
-- [ ] **Step 5: 实现 `src/panels/MetricsPanel.tsx`**
+- [x] **Step 5: 实现 `src/panels/MetricsPanel.tsx`**
 
 ```tsx
 import { Card, Table, Tag } from 'antd';
@@ -1562,12 +1562,12 @@ export function MetricsPanel() {
 }
 ```
 
-- [ ] **Step 6: 运行确认通过**
+- [x] **Step 6: 运行确认通过**
 
 Run: `cd /workspace/web && npm test`
 Expected: 全部 PASS（panels 3 个 + 既有）。若 `beforeEach` 中 `setDraft(seededDraft(), 2)` 的类型报错（DraftShape 结构不完整），把 `seededDraft` 的返回类型改为 `unknown as DraftShape` 或补全必需字段（`id/version/name` 已含）。
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 cd /workspace && git add web && git commit -m "feat(web): dimensions sort panel with dnd and metrics panel"
@@ -1583,7 +1583,7 @@ cd /workspace && git add web && git commit -m "feat(web): dimensions sort panel 
 - Create: `src/panels/RuleBuilder.tsx`
 - Create: `src/panels/RuleBuilder.test.tsx`
 
-- [ ] **Step 1: 写失败测试 `src/utils/summary.test.ts`**
+- [x] **Step 1: 写失败测试 `src/utils/summary.test.ts`**
 
 ```ts
 import { describe, expect, it } from 'vitest';
@@ -1616,12 +1616,12 @@ describe('summarizeCondition', () => {
 });
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd /workspace/web && npm test`
 Expected: 编译失败。
 
-- [ ] **Step 3: 实现 `src/utils/summary.ts`**
+- [x] **Step 3: 实现 `src/utils/summary.ts`**
 
 ```ts
 // 条件树 → 中文自然语言摘要（设计 16.5：易理解性核心）
@@ -1672,7 +1672,7 @@ function summarizeLeaf(c: CondJSON): string {
 }
 ```
 
-- [ ] **Step 4: 写失败测试 `src/panels/RuleBuilder.test.tsx`**
+- [x] **Step 4: 写失败测试 `src/panels/RuleBuilder.test.tsx`**
 
 ```tsx
 import { fireEvent, render, screen } from '@testing-library/react';
@@ -1727,7 +1727,7 @@ test('toggling rule visibility persists enabled flag', () => {
 });
 ```
 
-- [ ] **Step 5: 实现 `src/panels/RuleBuilder.tsx`**
+- [x] **Step 5: 实现 `src/panels/RuleBuilder.tsx`**
 
 ```tsx
 import { useCallback, useState } from 'react';
@@ -1836,12 +1836,12 @@ export function RuleBuilder() {
 
 说明：条件树编辑器（字段/操作符/值三级级联）、边框四边预览格、命中数徽标列入 v1.1 增强清单（设计 16.5 完整交互）；本任务先交付"规则卡片列表 + 图层排序 + 条件摘要 + 底色/加粗/行高基础控件 + 启用开关"，保证编辑器核心循环（增删排序切换）可测可用。`RuleBuilder` 测试覆盖列表/添加/启用切换三条主路径。
 
-- [ ] **Step 6: 运行确认通过**
+- [x] **Step 6: 运行确认通过**
 
 Run: `cd /workspace/web && npm test`
 Expected: 全部 PASS（summary 4 个 + RuleBuilder 3 个 + 既有）。
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 cd /workspace && git add web && git commit -m "feat(web): rule builder with layer sorting and condition summary"
@@ -1855,7 +1855,7 @@ cd /workspace && git add web && git commit -m "feat(web): rule builder with laye
 - Create: `src/panels/ConditionalFormatsPanel.tsx`
 - Create: `src/panels/PageSetupPanel.tsx`
 
-- [ ] **Step 1: 写失败测试（追加到 `src/panels/panels.test.tsx`）**
+- [x] **Step 1: 写失败测试（追加到 `src/panels/panels.test.tsx`）**
 
 ```tsx
 import { ConditionalFormatsPanel } from './ConditionalFormatsPanel';
@@ -1885,12 +1885,12 @@ test('PageSetupPanel shows orientation and toggles landscape', () => {
 });
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd /workspace/web && npm test`
 Expected: 编译失败（组件未定义）。
 
-- [ ] **Step 3: 实现 `src/panels/ConditionalFormatsPanel.tsx`**
+- [x] **Step 3: 实现 `src/panels/ConditionalFormatsPanel.tsx`**
 
 ```tsx
 import { Button, Card, Input, Select, Table, Tag } from 'antd';
@@ -1937,7 +1937,7 @@ export function ConditionalFormatsPanel() {
 }
 ```
 
-- [ ] **Step 4: 实现 `src/panels/PageSetupPanel.tsx`**
+- [x] **Step 4: 实现 `src/panels/PageSetupPanel.tsx`**
 
 ```tsx
 import { Card, InputNumber, Select, Space } from 'antd';
@@ -1986,12 +1986,12 @@ export function PageSetupPanel() {
 
 注意：`seededDraft` 未定义 `layout_opts`——测试断言 `lo.print?.orientation === 'landscape'` 要求 `mutateDraft` 路径能创建 `layout_opts.print`（实现已处理缺省创建）。若初始 draft 无 `layout_opts`，渲染 value 用 `print` 默认对象且 update 创建——测试可过。
 
-- [ ] **Step 5: 运行确认通过**
+- [x] **Step 5: 运行确认通过**
 
 Run: `cd /workspace/web && npm test`
 Expected: 全部 PASS（+2 个测试）。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 cd /workspace && git add web && git commit -m "feat(web): conditional formats and page setup panels"
@@ -2005,7 +2005,7 @@ cd /workspace && git add web && git commit -m "feat(web): conditional formats an
 - Create: `src/panels/Inspector.tsx`
 - Create: `src/panels/Inspector.test.tsx`
 
-- [ ] **Step 1: 写失败测试 `src/panels/Inspector.test.tsx`**
+- [x] **Step 1: 写失败测试 `src/panels/Inspector.test.tsx`**
 
 ```tsx
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
@@ -2044,12 +2044,12 @@ test('style modify button patches override via api', async () => {
 });
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd /workspace/web && npm test`
 Expected: 编译失败。
 
-- [ ] **Step 3: 实现 `src/panels/Inspector.tsx`**
+- [x] **Step 3: 实现 `src/panels/Inspector.tsx`**
 
 ```tsx
 import { useEffect, useState } from 'react';
@@ -2121,12 +2121,12 @@ export function Inspector() {
 
 注意：`patchOverride` 的后端契约（计划二）当前要求 `op/override{scope}`；`scope: {}` 回填语义是计划二 PATCH handler 的扩展建议——实施者若遇到后端校验失败（scope 为空拒绝），把 `applyPatch` 改为提交 `{ row_type: stats.type === 'subtotal' ? 'subtotal' : 'detail' }` 的最小 scope。测试中的 mock（`api/mock.ts` 的 PATCH handler）仅回显 ok，不影响断言。
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `cd /workspace/web && npm test`
 Expected: 全部 PASS（Inspector 3 个 + 既有）。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 cd /workspace && git add web && git commit -m "feat(web): inspector panel with style explain, data trace and override patch"
@@ -2140,7 +2140,7 @@ cd /workspace && git add web && git commit -m "feat(web): inspector panel with s
 - Create: `src/components/VersionDrawer.tsx`
 - Modify: `src/editor/EditorLayout.tsx`（顶栏接入保存/发布/版本/导出按钮）
 
-- [ ] **Step 1: 写失败测试 `src/hooks/useAutosave.test.ts`**
+- [x] **Step 1: 写失败测试 `src/hooks/useAutosave.test.ts`**
 
 ```ts
 import { act, renderHook, waitFor } from '@testing-library/react';
@@ -2187,12 +2187,12 @@ describe('useAutosave', () => {
 });
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd /workspace/web && npm test`
 Expected: 编译失败。
 
-- [ ] **Step 3: 实现 `src/hooks/useAutosave.ts`**
+- [x] **Step 3: 实现 `src/hooks/useAutosave.ts`**
 
 ```ts
 import { useEffect } from 'react';
@@ -2222,7 +2222,7 @@ export function useAutosave(delay = 300): void {
 
 注意：为测试友好，`useAutosave` 用 `setInterval` 轮询检查（而非事件驱动的防抖），语义等价且确定性强；若保存中又产生编辑，clean 后再次 dirty 触发下一轮。测试等待时间需略大于 delay（上面 150/100ms 已留裕量）。
 
-- [ ] **Step 4: 写失败测试 `src/components/VersionDrawer.test.tsx`**
+- [x] **Step 4: 写失败测试 `src/components/VersionDrawer.test.tsx`**
 
 ```tsx
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -2248,7 +2248,7 @@ test('rollback button calls api and shows confirmation', async () => {
 });
 ```
 
-- [ ] **Step 5: 实现 `src/components/VersionDrawer.tsx`**
+- [x] **Step 5: 实现 `src/components/VersionDrawer.tsx`**
 
 ```tsx
 import { useEffect, useState } from 'react';
@@ -2309,7 +2309,7 @@ export function VersionDrawer({ defId }: { defId: string }) {
 }
 ```
 
-- [ ] **Step 6: 修改 `src/editor/EditorLayout.tsx` 顶栏（保存状态、发布、版本、导出）**
+- [x] **Step 6: 修改 `src/editor/EditorLayout.tsx` 顶栏（保存状态、发布、版本、导出）**
 
 在返回的 `Row` 之前加顶栏（draft 非空时）：
 
@@ -2375,7 +2375,7 @@ render 部分（draft 分支）改为：
 
 中栏接入画布（draft/render 就绪时）：`render` 非空时渲染 `<PreviewCanvas schema={render} selectedCell={selectedCell} onSelect={selectCell} />`。右栏 `<Inspector />`。
 
-- [ ] **Step 7: 运行确认通过**
+- [x] **Step 7: 运行确认通过**
 
 Run: `cd /workspace/web && npm test`
 Expected: 全部 PASS（useAutosave 3 + VersionDrawer 2 + 既有）。`ExportButton` 尚未实现——为不阻塞本任务编译，先建最小占位组件（仅渲染"导出"按钮文本），Task 12 实现：
@@ -2387,7 +2387,7 @@ export function ExportButton({ defId }: { defId: string }) {
 }
 ```
 
-- [ ] **Step 8: 提交**
+- [x] **Step 8: 提交**
 
 ```bash
 cd /workspace && git add web && git commit -m "feat(web): autosave with optimistic lock, publish, version drawer"
@@ -2402,7 +2402,7 @@ cd /workspace && git add web && git commit -m "feat(web): autosave with optimist
 - Create: `src/themes/index.ts`、`src/themes/finance.ts`、`src/themes/compact.ts`
 - Create: `src/themes/themes.test.ts`
 
-- [ ] **Step 1: 写失败测试 `src/themes/themes.test.ts`**
+- [x] **Step 1: 写失败测试 `src/themes/themes.test.ts`**
 
 ```ts
 import { describe, expect, it } from 'vitest';
@@ -2429,7 +2429,7 @@ describe('themes', () => {
 });
 ```
 
-- [ ] **Step 2: 实现 `src/themes/finance.ts`、`src/themes/compact.ts`、`src/themes/index.ts`**
+- [x] **Step 2: 实现 `src/themes/finance.ts`、`src/themes/compact.ts`、`src/themes/index.ts`**
 
 `src/themes/finance.ts`：
 
@@ -2530,7 +2530,7 @@ export function applyTheme(draft: Record<string, unknown>, id: string): Record<s
 
 注意：`RuleJSON.style` 的字段类型需扩展以容纳 `border`——在 `src/panels/RuleBuilder.tsx` 的 `RuleJSON.style` 类型中补 `border?: unknown`（或按需扩展窄类型，最小改动为 `border?: {...}`）。实施者按编译错误调整 `RuleJSON` 类型即可。
 
-- [ ] **Step 3: 重写 `src/components/ExportButton.tsx`（提交→轮询→下载）**
+- [x] **Step 3: 重写 `src/components/ExportButton.tsx`（提交→轮询→下载）**
 
 ```tsx
 import { useEffect, useRef, useState } from 'react';
@@ -2587,12 +2587,12 @@ export function ExportButton({ defId }: { defId: string }) {
 }
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `cd /workspace/web && npm test`
 Expected: 全部 PASS（themes 3 + 既有）。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 cd /workspace && git add web && git commit -m "feat(web): export flow with progress polling and built-in themes"
@@ -2607,7 +2607,7 @@ cd /workspace && git add web && git commit -m "feat(web): export flow with progr
 - Create: `src/editor/EditorLayout.test.tsx`
 - Modify: `README.md`（web 使用说明）
 
-- [ ] **Step 1: 写失败测试 `src/editor/EditorLayout.test.tsx`**
+- [x] **Step 1: 写失败测试 `src/editor/EditorLayout.test.tsx`**
 
 ```tsx
 import { render, screen, waitFor } from '@testing-library/react';
@@ -2652,7 +2652,7 @@ test('theme selector applies finance theme on click', async () => {
 });
 ```
 
-- [ ] **Step 2: 在 `EditorLayout.tsx` 补主题套用入口**
+- [x] **Step 2: 在 `EditorLayout.tsx` 补主题套用入口**
 
 顶栏 Space 追加（放在导出按钮旁）：
 
@@ -2672,7 +2672,7 @@ const applyThemeDraft = (themeId: string) => {
 
 render 中（Draft 分支）加一个下拉（antd Select，含预设主题列表和"套用财务报告风/套用数据密集型"选项）。测试用 `getAllByText(/套用财务报告风/)` 匹配 Select option——为保证可测，给 Select 的 option label 直接命名为"套用财务报告风"与"套用数据密集型"。
 
-- [ ] **Step 3: 画布接入与左栏组装（承接 Task 11 Step 6 的骨架）**
+- [x] **Step 3: 画布接入与左栏组装（承接 Task 11 Step 6 的骨架）**
 
 在 `EditorLayout` 中栏渲染：
 
@@ -2719,17 +2719,17 @@ function useCFVisuals(schema: RenderSchema): Map<string, CFVisual> {
 
 说明：`ColInfo` 类型需补 `metric?: string` 字段（对应后端 `ColInfo.metric`，在 `api/types.ts` 的 `ColInfo` 中追加）。若后端未返回该字段，`findIndex` 回退到第 2 列（`col = 2`），行为与"单指标假设"一致。
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `cd /workspace/web && npm test`
 Expected: 全部 PASS（EditorLayout 2 + 既有）。
 
-- [ ] **Step 5: 构建与类型检查**
+- [x] **Step 5: 构建与类型检查**
 
 Run: `cd /workspace/web && npm run build`
 Expected: `tsc -b && vite build` 成功，产出 `dist/`。若 `noUnusedLocals` 报错，清理未用 import。
 
-- [ ] **Step 6: 更新 `README.md` 增加管理端说明**
+- [x] **Step 6: 更新 `README.md` 增加管理端说明**
 
 在 `dynamic-report/` 用法之后追加一节：
 
@@ -2747,7 +2747,7 @@ npm run build    # 产物 dist/（对接真实后端时关闭 mock 并配置 VIT
 编辑器路由 `/editor/:id`：左栏配置（维度排序/指标/样式规则图层/条件格式/页面设置）、中栏实时预览（样式字典 CSS、合并、条件格式 JS 模拟、虚拟滚动）、右栏检查器（样式解释/数据血缘/预览直改生成 override）。顶栏支持防抖自动保存、发布、版本历史与回滚、异步导出（轮询进度 + 下载）。
 ````
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 cd /workspace && git add web README.md && git commit -m "feat(web): editor assembly with theme apply, e2e smoke and docs"
