@@ -1,32 +1,44 @@
 import { useCallback } from 'react';
 import { Button, Card, Input, Select, Switch, Typography } from 'antd';
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
-import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useEditorStore } from '../store/editor';
 import type { DraftShape } from '../store/editor';
+import type { DimensionDef } from '../store/types';
 
-type DimRow = { field: string; label: string; sort: { by: string; dir: string } };
+export function reorderDims(dims: DimensionDef[], activeId: string, overId: string): DimensionDef[] {
+  const from = dims.findIndex((x) => x.field === activeId);
+  const to = dims.findIndex((x) => x.field === overId);
+  if (from < 0 || to < 0 || from === to) return dims;
+  return arrayMove(dims, from, to);
+}
 
-function SortableItem({ dim, index }: { dim: DimRow; index: number }) {
+function SortableItem({ dim, index }: { dim: DimensionDef; index: number }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: dim.field });
   const mutateDraft = useEditorStore((s) => s.mutateDraft);
   const checkpoint = useEditorStore((s) => s.checkpoint);
 
-  const update = useCallback((patch: Partial<DimRow> | ((d: DimRow) => void)) => {
+  const update = useCallback((patch: Partial<DimensionDef>) => {
     checkpoint(`编辑维度 ${dim.field}`);
     mutateDraft((d) => {
-      const dims = (d as DraftShape).dimensions as DimRow[];
-      if (typeof patch === 'function') patch(dims[index]);
-      else Object.assign(dims[index], patch);
+      const draft = d as DraftShape;
+      const dims = Array.isArray(draft.dimensions) ? (draft.dimensions as DimensionDef[]) : [];
+      if (index >= dims.length) return;
+      const next = [...dims];
+      next[index] = { ...next[index], ...patch };
+      draft.dimensions = next;
     });
   }, [checkpoint, mutateDraft, dim.field, index]);
 
   return (
-    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}
-      {...attributes} {...listeners}>
-      <Typography.Text type="secondary">≣</Typography.Text>
-      <Input style={{ width: 110 }} value={dim.label} onChange={(e) => update({ label: e.target.value })} />
+    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+      <span {...attributes} {...listeners} style={{ cursor: 'grab', display: 'inline-flex' }}>
+        <Typography.Text type="secondary">≣</Typography.Text>
+      </span>
+      <Input style={{ width: 110 }} defaultValue={dim.label} onBlur={(e) => {
+        if (e.target.value !== dim.label) update({ label: e.target.value });
+      }} />
       <Select style={{ width: 90 }} value={dim.sort.by} onChange={(v) => update({ sort: { by: v, dir: dim.sort.dir } })} options={[
         { value: 'sort_key', label: 'sort_key' },
         { value: 'value', label: '值' },
@@ -43,18 +55,16 @@ export function DimensionsPanel() {
   const mutateDraft = useEditorStore((s) => s.mutateDraft);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
-  const dims = ((draft as DraftShape | null)?.dimensions ?? []) as DimRow[];
+  const dims = Array.isArray((draft as DraftShape | null)?.dimensions) ? ((draft as DraftShape).dimensions as DimensionDef[]) : [];
 
   const onDragEnd = (e: DragEndEvent) => {
     const over = e.over;
     if (!over || e.active.id === over.id) return;
-    const from = dims.findIndex((x) => x.field === e.active.id);
-    const to = dims.findIndex((x) => x.field === over.id);
-    if (from < 0 || to < 0) return;
+    const next = reorderDims(dims, String(e.active.id), String(over.id));
+    if (next === dims) return;
     checkpoint('调整维度顺序');
     mutateDraft((d) => {
-      const arr = (d as DraftShape).dimensions as DimRow[];
-      arr.splice(to, 0, arr.splice(from, 1)[0]);
+      (d as DraftShape).dimensions = next;
     });
   };
 

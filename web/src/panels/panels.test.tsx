@@ -1,8 +1,9 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import { DimensionsPanel } from './DimensionsPanel';
+import { render, screen, fireEvent, act } from '@testing-library/react';
+import { DimensionsPanel, reorderDims } from './DimensionsPanel';
 import { MetricsPanel } from './MetricsPanel';
 import { useEditorStore } from '../store/editor';
 import type { DraftShape } from '../store/editor';
+import type { DimensionDef } from '../store/types';
 
 function seededDraft(): DraftShape {
   return {
@@ -43,14 +44,58 @@ test('editing dimension label mutates draft via store', () => {
   render(<DimensionsPanel />);
   const input = screen.getByDisplayValue('大区');
   fireEvent.change(input, { target: { value: '区域' } });
+  fireEvent.blur(input);
   const d = useEditorStore.getState().draft as DraftShape;
   const dims = d.dimensions as Array<{ label: string }>;
   expect(dims[0].label).toBe('区域');
   expect(useEditorStore.getState().saveState).toBe('dirty');
 });
 
-test('MetricsPanel shows agg type and swap toggles', () => {
+test('MetricsPanel shows agg type', () => {
   render(<MetricsPanel />);
   expect(screen.getByText('销售额')).toBeTruthy();
   expect(screen.getByText('SUM')).toBeTruthy();
+});
+
+test('undo restores dimension label after edit', () => {
+  render(<DimensionsPanel />);
+  const input = screen.getByDisplayValue('大区');
+  fireEvent.change(input, { target: { value: '区域' } });
+  fireEvent.blur(input);
+  expect(((useEditorStore.getState().draft as DraftShape).dimensions as Array<{ label: string }>)[0].label).toBe('区域');
+  act(() => {
+    useEditorStore.getState().undo();
+  });
+  const dims = (useEditorStore.getState().draft as DraftShape).dimensions as Array<{ label: string }>;
+  expect(dims[0].label).toBe('大区');
+});
+
+describe('reorderDims', () => {
+  const dims: DimensionDef[] = [
+    { field: 'a', label: 'A', sort: { by: 'sort_key', dir: 'asc' } },
+    { field: 'b', label: 'B', sort: { by: 'value', dir: 'asc' } },
+    { field: 'c', label: 'C', sort: { by: 'value', dir: 'desc' } },
+  ];
+
+  test('moves item forward (from < to)', () => {
+    const next = reorderDims(dims, 'a', 'c');
+    expect(next.map((x) => x.field)).toEqual(['b', 'c', 'a']);
+  });
+
+  test('moves item backward (from > to)', () => {
+    const next = reorderDims(dims, 'c', 'a');
+    expect(next.map((x) => x.field)).toEqual(['c', 'a', 'b']);
+  });
+
+  test('returns same array when activeId not found', () => {
+    expect(reorderDims(dims, 'missing', 'b')).toBe(dims);
+  });
+
+  test('returns same array when over target is null (overId not found)', () => {
+    expect(reorderDims(dims, 'a', 'missing')).toBe(dims);
+  });
+
+  test('returns same array when from equals to', () => {
+    expect(reorderDims(dims, 'b', 'b')).toBe(dims);
+  });
 });
