@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
+	_ "github.com/jackc/pgx/v5/stdlib" // registers the "pgx" database/sql driver
 	_ "modernc.org/sqlite"
 
 	"dynamic-report/internal/catalog"
@@ -19,7 +20,7 @@ import (
 
 func main() {
 	addr := flag.String("addr", ":8080", "listen address")
-	dbPath := flag.String("db", "catalog.db", "sqlite path")
+	dbDSN := flag.String("db", "catalog.db", "database connection string: SQLite file path (catalog.db, :memory:, file:…), or a PostgreSQL DSN (postgres://user:pass@host:5432/db, postgresql://…, postgres:…, or a libpq host=… dbname=… string)")
 	artDir := flag.String("artifacts", "artifacts", "artifact directory")
 	csvDir := flag.String("csv", ".", "csv data directory")
 	sourceRef := flag.String("source", "csv_local", "source ref for CSV fallback")
@@ -28,11 +29,17 @@ func main() {
 	if err := os.MkdirAll(*artDir, 0o755); err != nil {
 		log.Fatal(err)
 	}
-	db, err := sql.Open("sqlite", *dbPath)
+
+	dialect := catalog.DialectFromDSN(*dbDSN)
+	driver := "sqlite"
+	if dialect == catalog.DialectPostgres {
+		driver = catalog.PostgresDriver
+	}
+	db, err := sql.Open(driver, *dbDSN)
 	if err != nil {
 		log.Fatal(err)
 	}
-	store, err := catalog.NewStore(db)
+	store, err := catalog.NewStore(db, dialect)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -49,7 +56,7 @@ func main() {
 	}
 	srv := httpapi.NewServer(cache, orc, dsf)
 
-	log.Printf("reportserv listening on %s (db=%s artifacts=%s csv=%s)", *addr, *dbPath, *artDir, *csvDir)
+	log.Printf("reportserv listening on %s (db=%s [%s] artifacts=%s csv=%s)", *addr, *dbDSN, dialect, *artDir, *csvDir)
 	if err := http.ListenAndServe(*addr, srv); err != nil {
 		log.Fatal(err)
 	}

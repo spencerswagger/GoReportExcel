@@ -23,7 +23,7 @@ func newServer(t *testing.T) *Server {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store, err := catalog.NewStore(db)
+	store, err := catalog.NewStore(db, catalog.DialectSQLite)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"os"
 	"testing"
 
 	_ "modernc.org/sqlite"
@@ -16,7 +17,7 @@ func openTest(t *testing.T) *Store {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	s, err := NewStore(db)
+	s, err := NewStore(db, DialectSQLite)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,10 +268,10 @@ func TestStoreNewStoreIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	if _, err := NewStore(db); err != nil {
+	if _, err := NewStore(db, DialectSQLite); err != nil {
 		t.Fatalf("first NewStore: %v", err)
 	}
-	if _, err := NewStore(db); err != nil {
+	if _, err := NewStore(db, DialectSQLite); err != nil {
 		t.Fatalf("second NewStore on existing schema should succeed: %v", err)
 	}
 }
@@ -287,5 +288,69 @@ func TestStoreDraftConflictRejected(t *testing.T) {
 	err := s.SaveDraft("r1", validPayload("r1", 1), "c")
 	if !errors.Is(err, ErrDraftConflict) {
 		t.Fatalf("err = %v, want ErrDraftConflict", err)
+	}
+}
+
+// TestStorePostgresLifecycle exercises the full draft→publish→rollback flow
+// against a real PostgreSQL server. It is skipped unless TEST_PG_DSN is set,
+// e.g.:
+//
+//	TEST_PG_DSN='postgres://user:pass@localhost:5432/goreport_test?sslmode=disable' \
+//		go test ./internal/catalog/ -run TestStorePostgresLifecycle -v
+//
+// The DSN may point at any throwaway database on a developer or CI Postgres:
+// the test drops the definitions table before and after itself.
+func TestStorePostgresLifecycle(t *testing.T) {
+	dsn := os.Getenv("TEST_PG_DSN")
+	if dsn == "" {
+		t.Skip("TEST_PG_DSN not set; skipping PostgreSQL integration test")
+	}
+	db, err := sql.Open(PostgresDriver, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	if _, err := db.Exec(`DROP TABLE IF EXISTS definitions`); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = db.Exec(`DROP TABLE IF EXISTS definitions`)
+	})
+	if err := db.Ping(); err != nil {
+		t.Fatalf("ping postgres: %v (is the server up and the DSN valid?)", err)
+	}
+
+	s, err := NewStore(db, DialectPostgres)
+	if err != nil {
+		t.Fatalf("NewStore(postgres): %v", err)
+	}
+	// Schema creation is idempotent like on SQLite.
+	if _, err := NewStore(db, DialectPostgres); err != nil {
+		t.Fatalf("second NewStore(postgres): %v", err)
+	}
+
+	if err := s.SaveDraft("pg1", validPayload("pg1", 1), "test"); err != nil {
+		t.Fatalf("SaveDraft: %v", err)
+	}
+	draft, err := s.GetDraft("pg1")
+	if err != nil || draft == nil || draft.Version != 1 {
+		t.Fatalf("GetDraft = %v err = %v", draft, err)
+	}
+	if err := s.Publish("pg1", "test"); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	pub, err := s.GetPublished("pg1")
+	if err != nil || pub == nil {
+		t.Fatalf("GetPublished = %v err = %v", pub, err)
+	}
+	if pub.Version != 1 {
+		t.Fatalf("published version = %d, want 1", pub.Version)
+	}
+	if err := s.Rollback("pg1", 1, "test"); err != nil {
+		t.Fatalf("Rollback: %v", err)
+	}
+	vs, err := s.Versions("pg1")
+	if err != nil || len(vs) != 2 {
+		t.Fatalf("Versions = %v err = %v (want 2 rows)", vs, err)
 	}
 }

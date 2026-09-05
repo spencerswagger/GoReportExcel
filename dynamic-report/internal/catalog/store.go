@@ -43,17 +43,26 @@ type VersionInfo struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-// Store persists report definitions in a SQLite database.
+// Store persists report definitions in a SQL database (SQLite or PostgreSQL).
 type Store struct {
-	db *sql.DB
+	db      *sql.DB
+	dialect Dialect
 }
 
-// NewStore creates a Store backed by db and applies the schema.
-func NewStore(db *sql.DB) (*Store, error) {
+// NewStore creates a Store backed by db and applies the schema. The dialect
+// determines how '?' placeholders are rebound (SQLite keeps them, PostgreSQL
+// rewrites them to $1..$N).
+func NewStore(db *sql.DB, d Dialect) (*Store, error) {
 	if _, err := db.Exec(schemaSQL); err != nil {
 		return nil, fmt.Errorf("catalog: init schema: %w", err)
 	}
-	return &Store{db: db}, nil
+	return &Store{db: db, dialect: d}, nil
+}
+
+// q rebinds a statement written with '?' positional placeholders into the
+// store's dialect (SQLite passthrough, PostgreSQL → $1..$N).
+func (s *Store) q(query string) string {
+	return s.dialect.Rebind(query)
 }
 
 // now returns the current time in RFC3339 UTC.
@@ -76,25 +85,25 @@ func rowToMeta(row *sql.Row) (*DefMeta, error) {
 
 // GetDraft returns the newest draft of the definition, or nil when absent.
 func (s *Store) GetDraft(id string) (*DefMeta, error) {
-	row := s.db.QueryRow(`SELECT id, version, status, payload, updated_by, updated_at
+	row := s.db.QueryRow(s.q(`SELECT id, version, status, payload, updated_by, updated_at
 		FROM definitions WHERE id = ? AND status = 'draft'
-		ORDER BY version DESC, updated_at DESC LIMIT 1`, id)
+		ORDER BY version DESC, updated_at DESC LIMIT 1`), id)
 	return rowToMeta(row)
 }
 
 // GetPublished returns the newest published version of the definition, or nil
 // when absent.
 func (s *Store) GetPublished(id string) (*DefMeta, error) {
-	row := s.db.QueryRow(`SELECT id, version, status, payload, updated_by, updated_at
+	row := s.db.QueryRow(s.q(`SELECT id, version, status, payload, updated_by, updated_at
 		FROM definitions WHERE id = ? AND status = 'published'
-		ORDER BY version DESC, updated_at DESC LIMIT 1`, id)
+		ORDER BY version DESC, updated_at DESC LIMIT 1`), id)
 	return rowToMeta(row)
 }
 
 // GetVersion 返回指定已发布版本；无则 (nil, nil)。
 func (s *Store) GetVersion(id string, v int) (*DefMeta, error) {
-	row := s.db.QueryRow(`SELECT id,version,status,payload,updated_by,updated_at FROM definitions
-		WHERE id=? AND version=? AND status='published'`, id, v)
+	row := s.db.QueryRow(s.q(`SELECT id,version,status,payload,updated_by,updated_at FROM definitions
+		WHERE id=? AND version=? AND status='published'`), id, v)
 	return rowToMeta(row)
 }
 
@@ -109,20 +118,20 @@ func (s *Store) SaveDraft(id, payload, by string) error {
 	}
 
 	var maxV *int
-	if err := s.db.QueryRow(`SELECT MAX(version) FROM definitions WHERE id = ? AND status = 'draft'`, id).Scan(&maxV); err != nil {
+	if err := s.db.QueryRow(s.q(`SELECT MAX(version) FROM definitions WHERE id = ? AND status = 'draft'`), id).Scan(&maxV); err != nil {
 		return fmt.Errorf("save draft %s: %w", id, err)
 	}
 	if maxV != nil && *maxV > p.Version {
 		return fmt.Errorf("%w: have %d, base %d", ErrDraftConflict, *maxV, p.Version)
 	}
 
-	res, err := s.db.Exec(`INSERT INTO definitions(id, version, status, payload, updated_by, updated_at)
+	res, err := s.db.Exec(s.q(`INSERT INTO definitions(id, version, status, payload, updated_by, updated_at)
 		VALUES (?, ?, 'draft', ?, ?, ?)
 		ON CONFLICT(id, version) DO UPDATE SET
 			payload = excluded.payload,
 			updated_by = excluded.updated_by,
 			updated_at = excluded.updated_at
-		WHERE definitions.status = 'draft'`,
+		WHERE definitions.status = 'draft'`),
 		id, p.Version, payload, by, now())
 	if err != nil {
 		return fmt.Errorf("save draft %s: %w", id, err)
@@ -146,9 +155,9 @@ func (s *Store) Publish(id, by string) error {
 	// Read the newest draft inside the transaction so a concurrent SaveDraft
 	// cannot slip in between the read and the write.
 	var draft DefMeta
-	err = tx.QueryRow(`SELECT id, version, status, payload, updated_by, updated_at
+	err = tx.QueryRow(s.q(`SELECT id, version, status, payload, updated_by, updated_at
 		FROM definitions WHERE id = ? AND status = 'draft'
-		ORDER BY version DESC, updated_at DESC LIMIT 1`, id).
+		ORDER BY version DESC, updated_at DESC LIMIT 1`), id).
 		Scan(&draft.ID, &draft.Version, &draft.Status, &draft.Payload, &draft.UpdatedBy, &draft.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -160,7 +169,7 @@ func (s *Store) Publish(id, by string) error {
 	// The next published version is one above the newest published version;
 	// when nothing has been published yet it is one above the draft's version.
 	var maxV int
-	if err := tx.QueryRow(`SELECT COALESCE(MAX(version), ?) FROM definitions WHERE id = ? AND status = 'published'`, draft.Version, id).Scan(&maxV); err != nil {
+	if err := tx.QueryRow(s.q(`SELECT COALESCE(MAX(version), ?) FROM definitions WHERE id = ? AND status = 'published'`), draft.Version, id).Scan(&maxV); err != nil {
 		return fmt.Errorf("publish %s: %w", id, err)
 	}
 	newV := maxV + 1
@@ -168,16 +177,16 @@ func (s *Store) Publish(id, by string) error {
 	if err != nil {
 		return fmt.Errorf("publish %s: %w", id, err)
 	}
-	if _, err := tx.Exec(`INSERT INTO definitions(id, version, status, payload, updated_by, updated_at)
+	if _, err := tx.Exec(s.q(`INSERT INTO definitions(id, version, status, payload, updated_by, updated_at)
 		VALUES (?, ?, 'published', ?, ?, ?)
 		ON CONFLICT(id, version) DO UPDATE SET
 			status = excluded.status,
 			payload = excluded.payload,
 			updated_by = excluded.updated_by,
-			updated_at = excluded.updated_at`, id, newV, payload, by, now()); err != nil {
+			updated_at = excluded.updated_at`), id, newV, payload, by, now()); err != nil {
 		return fmt.Errorf("publish %s: %w", id, err)
 	}
-	if _, err := tx.Exec(`DELETE FROM definitions WHERE id = ? AND status = 'draft'`, id); err != nil {
+	if _, err := tx.Exec(s.q(`DELETE FROM definitions WHERE id = ? AND status = 'draft'`), id); err != nil {
 		return fmt.Errorf("publish %s: %w", id, err)
 	}
 	return tx.Commit()
@@ -186,7 +195,7 @@ func (s *Store) Publish(id, by string) error {
 // Rollback re-publishes a previous published version as a brand new version.
 func (s *Store) Rollback(id string, targetVersion int, by string) error {
 	var payload string
-	err := s.db.QueryRow(`SELECT payload FROM definitions WHERE id = ? AND version = ? AND status = 'published'`, id, targetVersion).Scan(&payload)
+	err := s.db.QueryRow(s.q(`SELECT payload FROM definitions WHERE id = ? AND version = ? AND status = 'published'`), id, targetVersion).Scan(&payload)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("rollback %s: published version %d not found", id, targetVersion)
@@ -201,7 +210,7 @@ func (s *Store) Rollback(id string, targetVersion int, by string) error {
 	defer tx.Rollback()
 
 	var maxV int
-	if err := tx.QueryRow(`SELECT COALESCE(MAX(version), ?) FROM definitions WHERE id = ? AND status = 'published'`, targetVersion, id).Scan(&maxV); err != nil {
+	if err := tx.QueryRow(s.q(`SELECT COALESCE(MAX(version), ?) FROM definitions WHERE id = ? AND status = 'published'`), targetVersion, id).Scan(&maxV); err != nil {
 		return err
 	}
 	newV := maxV + 1
@@ -209,13 +218,13 @@ func (s *Store) Rollback(id string, targetVersion int, by string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := tx.Exec(`INSERT INTO definitions(id, version, status, payload, updated_by, updated_at)
+	if _, err := tx.Exec(s.q(`INSERT INTO definitions(id, version, status, payload, updated_by, updated_at)
 		VALUES (?, ?, 'published', ?, ?, ?)
 		ON CONFLICT(id, version) DO UPDATE SET
 			status = excluded.status,
 			payload = excluded.payload,
 			updated_by = excluded.updated_by,
-			updated_at = excluded.updated_at`, id, newV, newPayload, by, now()); err != nil {
+			updated_at = excluded.updated_at`), id, newV, newPayload, by, now()); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -223,8 +232,8 @@ func (s *Store) Rollback(id string, targetVersion int, by string) error {
 
 // Versions lists every version of the definition, newest first.
 func (s *Store) Versions(id string) ([]VersionInfo, error) {
-	rows, err := s.db.Query(`SELECT version, status, updated_by, updated_at
-		FROM definitions WHERE id = ? ORDER BY version DESC, updated_at DESC`, id)
+	rows, err := s.db.Query(s.q(`SELECT version, status, updated_by, updated_at
+		FROM definitions WHERE id = ? ORDER BY version DESC, updated_at DESC`), id)
 	if err != nil {
 		return nil, err
 	}
@@ -273,7 +282,7 @@ func (s *Store) DiffSummary(id string, newer, older int) ([]string, error) {
 // payloadAt returns the payload of a specific published version.
 func (s *Store) payloadAt(id string, v int) (string, error) {
 	var payload string
-	err := s.db.QueryRow(`SELECT payload FROM definitions WHERE id = ? AND version = ? AND status = 'published'`, id, v).Scan(&payload)
+	err := s.db.QueryRow(s.q(`SELECT payload FROM definitions WHERE id = ? AND version = ? AND status = 'published'`), id, v).Scan(&payload)
 	if err != nil {
 		return "", err
 	}
