@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { ExportButton } from './ExportButton';
-import { server } from '../api/mock';
+import { server } from '../api/mock-server';
 
 test('happy path: export then poll shows download link', async () => {
   render(<ExportButton defId="r1" />);

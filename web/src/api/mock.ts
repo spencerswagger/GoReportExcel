@@ -1,6 +1,4 @@
 import { http, HttpResponse } from 'msw';
-import { setupServer } from 'msw/node';
-import { setupWorker, type SetupWorkerApi } from 'msw/browser';
 import type { CellDTO, RenderSchema, RowDTO } from './types';
 
 // ---------------------------------------------------------------------------
@@ -92,9 +90,10 @@ export const fixtureSchema: RenderSchema = {
 
 // ---------------------------------------------------------------------------
 // handlers — 全部挂在 '*/api/v1/...' 下
+// 仅依赖 msw 的 http/HttpResponse，浏览器与 node 环境共用。
 // ---------------------------------------------------------------------------
 
-const handlers = [
+export const handlers = [
   http.get('*/api/v1/definitions/:id/draft', ({ params }) =>
     HttpResponse.json({ version: 2, payload: JSON.stringify({ id: params.id, version: 2 }) }),
   ),
@@ -163,24 +162,3 @@ const handlers = [
     HttpResponse.json({ id: 'task-1', state: 'done', progress: 1, updated_at: '2026-09-05T00:00:01Z' }),
   ),
 ];
-
-// ---------------------------------------------------------------------------
-// server (node) / worker (browser) / enableMocking
-// ---------------------------------------------------------------------------
-
-export const server = setupServer(...handlers);
-
-// setupWorker 内部通过 isNodeProcess() 校验，在 vitest/node 环境直接调用会抛错，
-// 故仅在浏览器（非 node）环境创建 worker；测试环境 worker 为 undefined。
-const isNodeProcess =
-  typeof process !== 'undefined' && !!process.versions?.node;
-
-export const worker: SetupWorkerApi | undefined = isNodeProcess
-  ? undefined
-  : setupWorker(...handlers);
-
-export async function enableMocking() {
-  if (import.meta.env.DEV && worker) {
-    await worker.start({ onUnhandledRequest: 'bypass' });
-  }
-}

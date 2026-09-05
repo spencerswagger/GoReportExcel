@@ -2,7 +2,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { Inspector } from './Inspector';
 import { useEditorStore } from '../store/editor';
-import { server } from '../api/mock';
+import { server } from '../api/mock-server';
 
 beforeEach(() => {
   const s = useEditorStore.getState();

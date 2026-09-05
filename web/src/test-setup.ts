@@ -1,6 +1,6 @@
 import { cleanup } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll } from 'vitest';
-import { server } from './api/mock';
+import { server } from './api/mock-server';
 
 Object.defineProperty(window, 'matchMedia', {
   writable: true,

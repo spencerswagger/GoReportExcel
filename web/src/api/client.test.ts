@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { http, HttpResponse } from 'msw';
-import { server } from './mock';
+import { server } from './mock-server';
 import { getVersions, putDraft, submitExport } from './client';
 import type { VersionInfo } from './types';
 

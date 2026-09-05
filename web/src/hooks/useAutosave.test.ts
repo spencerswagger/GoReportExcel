@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { useAutosave } from './useAutosave';
 import { useEditorStore } from '../store/editor';
-import { server } from '../api/mock';
+import { server } from '../api/mock-server';
 import type { DraftShape } from '../store/editor';
 
 function seed() {

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { VersionDrawer } from './VersionDrawer';
-import { server } from '../api/mock';
+import { server } from '../api/mock-server';
 
 test('opens and lists versions from api', async () => {
   render(<VersionDrawer defId="r1" />);
