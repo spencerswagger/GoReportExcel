@@ -26,7 +26,7 @@ test('rollback button calls api and shows confirmation', async () => {
 
 test('shows error when rollback fails', async () => {
   server.use(
-    http.post('*/api/v1/definitions/:id/rollback', () =>
+    http.post('*/v1/definitions/:id/rollback', () =>
       HttpResponse.json({ error: 'boom' }, { status: 500 }),
     ),
   );

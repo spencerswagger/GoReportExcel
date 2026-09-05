@@ -39,12 +39,12 @@ function SortableItem({ dim, index }: { dim: DimensionDef; index: number }) {
       <Input style={{ width: 110 }} defaultValue={dim.label} onBlur={(e) => {
         if (e.target.value !== dim.label) update({ label: e.target.value });
       }} />
-      <Select style={{ width: 90 }} value={dim.sort.by} onChange={(v) => update({ sort: { by: v, dir: dim.sort.dir } })} options={[
+      <Select style={{ width: 90 }} value={dim.sort?.by ?? 'sort_key'} onChange={(v) => update({ sort: { by: v, dir: dim.sort?.dir ?? 'asc' } })} options={[
         { value: 'sort_key', label: 'sort_key' },
         { value: 'value', label: '值' },
       ]} />
-      <Switch checked={dim.sort.dir === 'desc'} checkedChildren="降" unCheckedChildren="升"
-        onChange={(v) => update({ sort: { by: dim.sort.by, dir: v ? 'desc' : 'asc' } })} />
+      <Switch checked={dim.sort?.dir === 'desc'} checkedChildren="降" unCheckedChildren="升"
+        onChange={(v) => update({ sort: { by: dim.sort?.by ?? 'sort_key', dir: v ? 'desc' : 'asc' } })} />
     </div>
   );
 }
@@ -70,7 +70,7 @@ export function DimensionsPanel() {
 
   return (
     <Card size="small" className="ate-panel" title="维度与排序">
-      <div className="panel-muted" data-testid="sort-hint">排序依据：{dims[0]?.sort.by ?? '—'}</div>
+      <div className="panel-muted" data-testid="sort-hint">排序依据：{dims[0]?.sort?.by ?? '—'}</div>
       <DndContext sensors={sensors} onDragEnd={onDragEnd}>
         <SortableContext items={dims.map((x) => x.field)} strategy={verticalListSortingStrategy}>
           {dims.map((dim, i) => <SortableItem key={dim.field} dim={dim} index={i} />)}

@@ -33,6 +33,7 @@ func NewServer(cache *catalog.Cache, orc *orchestrator.Orchestrator, dsf DataSou
 	s.mux = mux
 	// 定义管理
 	mux.HandleFunc("GET /v1/definitions/{id}/draft", s.getDraft)
+	mux.HandleFunc("GET /v1/definitions/{id}/published", s.getPublished)
 	mux.HandleFunc("PUT /v1/definitions/{id}/draft", s.putDraft)
 	mux.HandleFunc("POST /v1/definitions/{id}/publish", s.publish)
 	mux.HandleFunc("GET /v1/definitions/{id}/versions", s.versions)
@@ -73,7 +74,8 @@ func (s *Server) getDraft(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 404, "no draft")
 		return
 	}
-	writeJSON(w, 200, map[string]any{"version": meta.Version, "payload": json.RawMessage(meta.Payload)})
+	// payload 以纯字符串返回，前端再 JSON.parse，与 mock 行为一致。
+	writeJSON(w, 200, map[string]any{"version": meta.Version, "payload": meta.Payload})
 }
 
 func (s *Server) putDraft(w http.ResponseWriter, r *http.Request) {
@@ -107,6 +109,20 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 	s.cache.Invalidate(id)
 	s.cache.NotifyChanged(id)
 	writeJSON(w, 200, map[string]string{"ok": "published"})
+}
+
+func (s *Server) getPublished(w http.ResponseWriter, r *http.Request) {
+	meta, err := s.cache.Store().GetPublished(r.PathValue("id"))
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	if meta == nil {
+		writeErr(w, 404, "no published version")
+		return
+	}
+	// payload 以纯字符串返回，前端再 JSON.parse，与 mock 行为一致。
+	writeJSON(w, 200, map[string]any{"version": meta.Version, "payload": meta.Payload})
 }
 
 func (s *Server) versions(w http.ResponseWriter, r *http.Request) {

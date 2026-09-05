@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Button, Dropdown, MenuProps, Spin } from 'antd';
 import { Link, useParams } from 'react-router-dom';
-import { getDraft, publish, renderPreview } from '../api/client';
+import { ApiError, getDraft, getPublished, publish, renderPreview } from '../api/client';
 import { useEditorStore } from '../store/editor';
 import { useAutosave } from '../hooks/useAutosave';
 import { VersionDrawer } from '../components/VersionDrawer';
@@ -59,7 +59,17 @@ export default function EditorLayout() {
     reset(id, 0);
     (async () => {
       try {
-        const d = await getDraft(id);
+        // 优先加载草稿；无草稿时回退到已发布版本作为编辑基础。
+        let d;
+        try {
+          d = await getDraft(id);
+        } catch (e) {
+          if (e instanceof ApiError && e.status === 404) {
+            d = await getPublished(id);
+          } else {
+            throw e;
+          }
+        }
         const base = d.version;
         const payload = JSON.parse(d.payload);
         if (!cancelled) setDraft({ ...payload, id }, base);

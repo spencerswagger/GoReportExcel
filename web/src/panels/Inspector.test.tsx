@@ -44,7 +44,7 @@ test('shows hint when no cell selected', () => {
 
 test('shows error alert when patch fails', async () => {
   server.use(
-    http.patch('*/api/v1/definitions/:id/overrides', () =>
+    http.patch('*/v1/definitions/:id/overrides', () =>
       HttpResponse.json({ error: 'boom' }, { status: 500 }),
     ),
   );

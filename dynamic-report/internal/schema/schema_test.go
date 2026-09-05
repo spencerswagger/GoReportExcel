@@ -210,6 +210,7 @@ func TestPageRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	all := len(s.Rows) - 1 // 数据行总数
 	if err := s.PageRows(0, 4); err != nil {
 		t.Fatal(err)
 	}
@@ -218,6 +219,17 @@ func TestPageRows(t *testing.T) {
 	}
 	if s.Rows[0].Idx != 1 || s.Rows[1].Idx != 2 {
 		t.Fatalf("header must stay first: %+v", s.Rows[0])
+	}
+	// 请求窗口超过可用行数时应静默截断而非报错（与前端预测模式一致）。
+	s2, err := Build(def, l, style.NewEngine(&style.RulesDoc{}), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s2.PageRows(0, 9999); err != nil {
+		t.Fatalf("oversized window should clamp, got err: %v", err)
+	}
+	if len(s2.Rows) != all+1 {
+		t.Fatalf("clamped rows = %d, want %d", len(s2.Rows), all+1)
 	}
 }
 

@@ -14,7 +14,7 @@ test('happy path: export then poll shows download link', async () => {
 
 test('failure path: submit export 500 shows error alert', async () => {
   server.use(
-    http.post('*/api/v1/export', () =>
+    http.post('*/v1/export', () =>
       HttpResponse.json({ error: 'boom' }, { status: 500 }),
     ),
   );

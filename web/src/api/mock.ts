@@ -89,12 +89,12 @@ export const fixtureSchema: RenderSchema = {
 };
 
 // ---------------------------------------------------------------------------
-// handlers — 全部挂在 '*/api/v1/...' 下
+// handlers — 全部挂在 '*/v1/...' 下
 // 仅依赖 msw 的 http/HttpResponse，浏览器与 node 环境共用。
 // ---------------------------------------------------------------------------
 
 export const handlers = [
-  http.get('*/api/v1/definitions/:id/draft', ({ params }) =>
+  http.get('*/v1/definitions/:id/draft', ({ params }) =>
     HttpResponse.json({
       version: 2,
       payload: JSON.stringify({
@@ -109,7 +109,22 @@ export const handlers = [
     }),
   ),
 
-  http.put('*/api/v1/definitions/:id/draft', async ({ request }) => {
+  http.get('*/v1/definitions/:id/published', ({ params }) =>
+    HttpResponse.json({
+      version: 2,
+      payload: JSON.stringify({
+        id: params.id,
+        version: 2,
+        name: params.id === 'rpt_sales' ? '销售报表' : '新建报表',
+        metrics: [
+          { field: 'amount', label: '销售额', agg: 'SUM', num_fmt_ref: 'money' },
+          { field: 'qty', label: '件数', agg: 'COUNT', num_fmt_ref: 'int' },
+        ],
+      }),
+    }),
+  ),
+
+  http.put('*/v1/definitions/:id/draft', async ({ request }) => {
     const body = await request.json().catch(() => ({})) as { version?: number };
     if (body.version === 1) {
       return HttpResponse.json({ error: 'draft conflict: base version outdated' }, { status: 409 });
@@ -117,28 +132,28 @@ export const handlers = [
     return HttpResponse.json({ ok: 'saved' });
   }),
 
-  http.post('*/api/v1/definitions/:id/publish', () =>
+  http.post('*/v1/definitions/:id/publish', () =>
     HttpResponse.json({ ok: 'published' }),
   ),
 
-  http.get('*/api/v1/definitions/:id/versions', () =>
+  http.get('*/v1/definitions/:id/versions', () =>
     HttpResponse.json([
       { version: 2, status: 'published', updated_by: 'api', updated_at: '2026-09-05T00:00:00Z' },
       { version: 1, status: 'draft', updated_by: 'api', updated_at: '2026-09-04T00:00:00Z' },
     ]),
   ),
 
-  http.post('*/api/v1/definitions/:id/rollback', () =>
+  http.post('*/v1/definitions/:id/rollback', () =>
     HttpResponse.json({ ok: 'rolled back' }),
   ),
 
-  http.patch('*/api/v1/definitions/:id/overrides', async ({ request }) => {
+  http.patch('*/v1/definitions/:id/overrides', async ({ request }) => {
     const body = await request.json().catch(() => ({})) as { override?: { id?: string } };
     const oid = body.override?.id ?? 'X';
     return HttpResponse.json({ ok: `override ${oid} updated` });
   }),
 
-  http.post('*/api/v1/render', async ({ request }) => {
+  http.post('*/v1/render', async ({ request }) => {
     const body = await request.json().catch(() => ({})) as { row_window?: { from: number; to: number } };
     const schema = structuredClone(fixtureSchema);
     if (body.row_window) {
@@ -148,7 +163,7 @@ export const handlers = [
     return HttpResponse.json({ version: fixtureSchema.report.def_version, schema });
   }),
 
-  http.get('*/api/v1/cells/:cellId/style-explain', ({ params }) =>
+  http.get('*/v1/cells/:cellId/style-explain', ({ params }) =>
     HttpResponse.json({
       cell_id: params.cellId,
       explains: [{ id: 'zebra', reason: 'row_type eq "detail" and seq_in_group % 2 eq 0' }],
@@ -156,7 +171,7 @@ export const handlers = [
     }),
   ),
 
-  http.get('*/api/v1/cells/:cellId/data-trace', ({ params }) =>
+  http.get('*/v1/cells/:cellId/data-trace', ({ params }) =>
     HttpResponse.json({
       cell_id: params.cellId,
       trace: { source_count: 2, sample_rows: [1, 2] },
@@ -165,11 +180,11 @@ export const handlers = [
     }),
   ),
 
-  http.post('*/api/v1/export', () =>
+  http.post('*/v1/export', () =>
     HttpResponse.json({ task_id: 'task-1', def_version: 2 }),
   ),
 
-  http.get('*/api/v1/export/:taskId', () =>
+  http.get('*/v1/export/:taskId', () =>
     HttpResponse.json({ id: 'task-1', state: 'done', progress: 1, updated_at: '2026-09-05T00:00:01Z' }),
   ),
 ];

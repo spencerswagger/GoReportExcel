@@ -23,7 +23,7 @@ describe('api client', () => {
 
   it('maps 409 draft conflict to typed error', async () => {
     server.use(
-      http.put('*/api/v1/definitions/r1/draft', () =>
+      http.put('*/v1/definitions/r1/draft', () =>
         HttpResponse.json({ error: 'draft conflict: base version outdated' }, { status: 409 }),
       ),
     );

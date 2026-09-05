@@ -359,10 +359,23 @@ func buildConditionalFormats(def *model.ReportDefinition, l *engine.Layout, ndim
 }
 
 // PageRows 按行窗口切片（窗口按"数据行序号"计，header 恒保留在首位）。
-// [from,to) 是数据行（即 Rows[1:]）的下标区间。
+// [from,to) 是数据行（即 Rows[1:]）的下标区间；超出可用行数时静默截断（与前端模式一致）。
 func (s *RenderSchema) PageRows(from, to int) error {
-	if from < 0 || to < from || to > len(s.Rows)-1 {
-		return fmt.Errorf("invalid row window [%d,%d), rows=%d", from, to, len(s.Rows)-1)
+	last := len(s.Rows) - 1 // 数据行总数（Rows[0] 为 header）
+	if last < 0 {
+		return fmt.Errorf("empty schema")
+	}
+	if from < 0 {
+		from = 0
+	}
+	if from > last {
+		from = last
+	}
+	if to < from {
+		to = from
+	}
+	if to > last {
+		to = last
 	}
 	body := s.Rows[1:]
 	s.Rows = append([]RowDTO{s.Rows[0]}, body[from:to]...)

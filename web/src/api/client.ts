@@ -3,7 +3,7 @@ import type {
   TraceResult, VersionInfo,
 } from './types';
 
-const BASE = '/api/v1';
+const BASE = '/v1';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -22,6 +22,10 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function getDraft(id: string) {
   return req<{ version: number; payload: string }>(`/definitions/${id}/draft`);
+}
+
+export function getPublished(id: string) {
+  return req<{ version: number; payload: string }>(`/definitions/${id}/published`);
 }
 
 export function putDraft(id: string, payload: string) {

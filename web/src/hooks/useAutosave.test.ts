@@ -47,7 +47,7 @@ describe('useAutosave', () => {
   it('returns to dirty on non-409 save failure', async () => {
     seed();
     server.use(
-      http.put('*/api/v1/definitions/:id/draft', () =>
+      http.put('*/v1/definitions/:id/draft', () =>
         HttpResponse.json({ error: 'boom' }, { status: 500 }),
       ),
     );
