@@ -9,5 +9,5 @@ test('renders list header and new-entry button', () => {
     </MemoryRouter>,
   );
   expect(screen.getByText('报表列表')).toBeTruthy();
-  expect(screen.getByRole('link', { name: /新建报表/ })).toBeTruthy();
+  expect(screen.getAllByRole('link', { name: /新建报表/ }).length).toBeGreaterThan(0);
 });

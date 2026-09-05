@@ -39,7 +39,7 @@ export function PageSetupPanel() {
   };
 
   return (
-    <Card size="small" title="页面设置">
+    <Card size="small" className="ate-panel" title="页面设置">
       <Space direction="vertical" style={{ width: '100%' }}>
         <Space>
           <span>方向</span>

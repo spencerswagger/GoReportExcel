@@ -112,7 +112,7 @@ export function RuleBuilder() {
   };
 
   return (
-    <Card size="small" title="样式规则（图层）"
+    <Card size="small" className="ate-panel" title="样式规则（图层）"
       extra={<Button size="small" type="primary" onClick={addRule}>添加规则</Button>}>
       <DndContext sensors={sensors} onDragEnd={onDragEnd}>
         <SortableContext items={rules.map((r) => r.id)} strategy={verticalListSortingStrategy}>

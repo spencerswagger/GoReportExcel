@@ -30,7 +30,7 @@ export function ConditionalFormatsPanel() {
   ];
 
   return (
-    <Card size="small" title="条件格式" extra={<Button size="small" type="primary" onClick={add}>添加</Button>}>
+    <Card size="small" className="ate-panel" title="条件格式" extra={<Button size="small" type="primary" onClick={add}>添加</Button>}>
       <Table<ConditionalFormatDef> rowKey={(r) => r.id} size="small" pagination={false} columns={cols} dataSource={cfs} />
     </Card>
   );

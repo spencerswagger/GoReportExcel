@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import EditorLayout from './EditorLayout';
 import { useEditorStore } from '../store/editor';
@@ -34,7 +34,7 @@ test('loads draft and renders three columns', async () => {
   });
 });
 
-test('theme selector applies finance theme on click', async () => {
+test('theme dropdown applies finance theme on select', async () => {
   render(
     <MemoryRouter initialEntries={['/editor/rpt_sales']}>
       <Routes>
@@ -43,8 +43,28 @@ test('theme selector applies finance theme on click', async () => {
     </MemoryRouter>,
   );
   await waitFor(() => expect(useEditorStore.getState().draft).not.toBeNull());
-  const apply = screen.getAllByText(/套用财务报告风/)[0];
-  apply.click();
+  // 打开主题下拉
+  fireEvent.click(screen.getByText('主题'));
+  // 展开后选中"套用财务报告风"菜单项
+  const item = await screen.findByText(/套用财务报告风/);
+  fireEvent.click(item);
   const d = useEditorStore.getState().draft as unknown as { style_rules: { rules: unknown[] } };
   expect(d.style_rules.rules.length).toBeGreaterThan(0);
+});
+
+test('toolbar exposes undo/redo and publish actions', async () => {
+  render(
+    <MemoryRouter initialEntries={['/editor/rpt_sales']}>
+      <Routes>
+        <Route path="/editor/:id" element={<EditorLayout />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  await waitFor(() => expect(useEditorStore.getState().draft).not.toBeNull());
+  expect(screen.getByText('撤销')).toBeTruthy();
+  expect(screen.getByText('重做')).toBeTruthy();
+  expect(screen.getByText('发布')).toBeTruthy();
+  expect(screen.getByText('导出')).toBeTruthy();
+  expect(screen.getByText('历史版本')).toBeTruthy();
+  expect(screen.getByText('已保存')).toBeTruthy();
 });

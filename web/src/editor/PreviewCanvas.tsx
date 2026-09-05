@@ -5,12 +5,13 @@ import { styleSheetCSS } from './StyleSheet';
 import { applyConditional, type CFVisual } from './conditional';
 
 // 选中单元格的可见高亮样式（组件内静态追加，不依赖后端样式字典）
-const SELECTED_CSS = '.cell-selected{outline:2px solid #1677ff;outline-offset:-2px}';
+const SELECTED_CSS = '.cell-selected{outline:2px solid #C8923E;outline-offset:-2px;z-index:2;position:relative}';
 
 interface Props {
   schema: RenderSchema;
   selectedCell?: string | null;
   onSelect?: (cellId: string) => void;
+  zoom?: number;
 }
 
 // 条件格式视觉注记：CFVisual 基础上附带 CF 颜色（data_bar 渐变用）
@@ -35,17 +36,16 @@ function useCFVisuals(schema: RenderSchema): Map<string, CFVisualEntry> {
   }, [schema]);
 }
 
-export default function PreviewCanvas({ schema, selectedCell, onSelect }: Props) {
+export default function PreviewCanvas({ schema, selectedCell, onSelect, zoom = 1 }: Props) {
   const css = useMemo(() => styleSheetCSS(schema.styles), [schema.styles]);
   const cfVisuals = useCFVisuals(schema);
   const scrollRef = useRef<HTMLDivElement>(null);
   const styleRef = useRef<HTMLStyleElement>(null);
-  const rowHeight = 24;
   const virtualizer = useVirtualizer({
     count: schema.rows.length,
     getScrollElement: () => scrollRef.current,
-    // 行高优先取 row.height，未设置时回退默认行高
-    estimateSize: (i) => schema.rows[i]?.height || rowHeight,
+    // 行高优先取 row.height，未设置时回退默认行高；zoom 放大时同步缩放
+    estimateSize: (i) => (schema.rows[i]?.height || 24) * zoom,
     overscan: 10,
   });
   const items = virtualizer.getVirtualItems();
@@ -73,7 +73,7 @@ export default function PreviewCanvas({ schema, selectedCell, onSelect }: Props)
       <div data-testid="virtual-canvas" style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
         {items.map((vi) => {
           const row = schema.rows[vi.index];
-          const h = row.height || rowHeight;
+          const h = (row.height || 24) * zoom;
           // 稀疏 cells 按 col 建索引，避免每列线性查找
           const cellMap = new Map(row.cells.map((c) => [c.col, c]));
           return (
@@ -85,7 +85,7 @@ export default function PreviewCanvas({ schema, selectedCell, onSelect }: Props)
               {schema.cols.map((col) => {
                 const cell = cellMap.get(col.idx);
                 const m = mergeOf(mergeByCol, col.idx, row.idx);
-                const width = (col.width ?? 0) * 7;
+                const width = (col.width ?? 0) * 7 * zoom;
                 // 合并区间内的覆盖行（非锚点）：渲染无文本占位 div，继承锚点样式，
                 // 保证锚点行滚出窗口时合并区背景/边框仍视觉连续
                 if (!m.anchor) {
@@ -103,7 +103,7 @@ export default function PreviewCanvas({ schema, selectedCell, onSelect }: Props)
                 }
                 if (!cell) return null;
                 return (
-                  <CellBox key={col.idx} cell={cell} cols={schema.cols}
+                  <CellBox key={col.idx} cell={cell} cols={schema.cols} zoom={zoom}
                     selected={selectedCell === cell.cell_id} onSelect={onSelect}
                     mergeFrom={m.r2 > m.r1 ? m.r1 : undefined}
                     mergeTo={m.r2 > m.r1 ? m.r2 : undefined}
@@ -137,14 +137,14 @@ function mergeOf(mergeByCol: Map<number, MergeInfo[]>, col: number, rowIdx: numb
   return { anchor: true, r1: rowIdx, r2: rowIdx };
 }
 
-function CellBox({ cell, cols, selected, onSelect, mergeFrom, mergeTo, cf }: {
+function CellBox({ cell, cols, selected, onSelect, mergeFrom, mergeTo, cf, zoom = 1 }: {
   cell: RowDTO['cells'][number]; cols: ColInfo[]; selected: boolean;
   onSelect?: (c: string) => void; mergeFrom?: number; mergeTo?: number;
-  cf?: CFVisualEntry;
+  cf?: CFVisualEntry; zoom?: number;
 }) {
   // 对齐方式取自 schema.cols 的 align 配置，不再硬编码列号
   const textAlign = cols[cell.col]?.align === 'right' ? 'right' : 'left';
-  const width = (cols[cell.col]?.width ?? 0) * 7;
+  const width = (cols[cell.col]?.width ?? 0) * 7 * zoom;
   const cfStyle = cf ? cfStyleOf(cf) : undefined;
   return (
     <div

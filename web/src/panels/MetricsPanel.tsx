@@ -13,7 +13,7 @@ export function MetricsPanel() {
     { title: '聚合', dataIndex: 'agg', render: (v: string) => <Tag color="blue">{v}</Tag> },
   ];
   return (
-    <Card size="small" title="指标配置">
+    <Card size="small" className="ate-panel" title="指标配置">
       <Table<MetricDef> rowKey={(r) => r.field} size="small" pagination={false} columns={cols} dataSource={metrics} />
     </Card>
   );

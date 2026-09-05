@@ -69,8 +69,8 @@ export function DimensionsPanel() {
   };
 
   return (
-    <Card size="small" title="维度与排序">
-      <Typography.Text type="secondary" data-testid="sort-hint">排序依据：{dims[0]?.sort.by ?? '—'}</Typography.Text>
+    <Card size="small" className="ate-panel" title="维度与排序">
+      <div className="panel-muted" data-testid="sort-hint">排序依据：{dims[0]?.sort.by ?? '—'}</div>
       <DndContext sensors={sensors} onDragEnd={onDragEnd}>
         <SortableContext items={dims.map((x) => x.field)} strategy={verticalListSortingStrategy}>
           {dims.map((dim, i) => <SortableItem key={dim.field} dim={dim} index={i} />)}

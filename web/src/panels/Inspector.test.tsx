@@ -39,7 +39,7 @@ test('shows hint when no cell selected', () => {
   const s = useEditorStore.getState();
   s.selectCell(null);
   render(<Inspector />);
-  expect(screen.getByText('点击预览中的单元格查看详情')).toBeTruthy();
+  expect(screen.getByText('点击预览中的单元格')).toBeTruthy();
 });
 
 test('shows error alert when patch fails', async () => {

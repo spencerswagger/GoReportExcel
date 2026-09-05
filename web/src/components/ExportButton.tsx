@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Progress, Space, Typography } from 'antd';
+import { Alert, Progress } from 'antd';
 import { exportDownloadUrl, exportStatus, submitExport } from '../api/client';
 
 export function ExportButton({ defId }: { defId: string }) {
@@ -19,6 +19,8 @@ export function ExportButton({ defId }: { defId: string }) {
   };
 
   useEffect(() => () => { cancelledRef.current = true; stopPoll(); }, []);
+
+  const busy = progress != null && state !== 'done' && state !== 'failed';
 
   const start = async () => {
     setErr(null);
@@ -60,20 +62,30 @@ export function ExportButton({ defId }: { defId: string }) {
     }, 1000);
   };
 
+  const failed = state === 'failed' || err != null;
+
   return (
-    <Space direction="vertical" size={4}>
-      <Space>
-        <Button size="small" type="primary" onClick={start} loading={progress != null && state !== 'done' && state !== 'failed'}>
-          导出
-        </Button>
-        {state === 'done' && taskId && (
-          <Typography.Link href={exportDownloadUrl(taskId)} target="_blank">下载 xlsx</Typography.Link>
-        )}
-        {progress != null && state !== 'done' && state !== 'failed' && (
-          <Progress type="circle" size={20} percent={progress} />
-        )}
-      </Space>
-      {(state === 'failed' || err) && <Alert type="error" message={err ?? '导出失败'} />}
-    </Space>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, position: 'relative' }}>
+      <button type="button" className="ate-icon-btn" onClick={start} disabled={busy} aria-label="导出">
+        <span className="glyph">{busy ? <span className="ate-spin-dot" style={{ fontSize: 10 }} /> : '⇩'}</span>
+        {busy ? `导出 ${progress ?? 0}%` : '导出'}
+      </button>
+      {state === 'done' && taskId && (
+        <a
+          href={exportDownloadUrl(taskId)}
+          target="_blank"
+          rel="noreferrer"
+          style={{ fontSize: 12, color: 'var(--accent-bright)', textDecoration: 'none', borderBottom: '1px dotted rgba(200,146,62,.5)', paddingBottom: 1 }}
+        >
+          下载 xlsx
+        </a>
+      )}
+      {busy && <Progress type="circle" size={16} percent={progress ?? 0} strokeColor="var(--accent)" trailColor="var(--chrome-line)" />}
+      {failed && (
+        <span style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 20, minWidth: 220 }}>
+          <Alert type="error" showIcon message={err ?? '导出失败'} />
+        </span>
+      )}
+    </span>
   );
 }

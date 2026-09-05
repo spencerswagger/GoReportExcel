@@ -95,7 +95,18 @@ export const fixtureSchema: RenderSchema = {
 
 export const handlers = [
   http.get('*/api/v1/definitions/:id/draft', ({ params }) =>
-    HttpResponse.json({ version: 2, payload: JSON.stringify({ id: params.id, version: 2 }) }),
+    HttpResponse.json({
+      version: 2,
+      payload: JSON.stringify({
+        id: params.id,
+        version: 2,
+        name: params.id === 'rpt_sales' ? '销售报表' : '新建报表',
+        metrics: [
+          { field: 'amount', label: '销售额', agg: 'SUM', num_fmt_ref: 'money' },
+          { field: 'qty', label: '件数', agg: 'COUNT', num_fmt_ref: 'int' },
+        ],
+      }),
+    }),
   ),
 
   http.put('*/api/v1/definitions/:id/draft', async ({ request }) => {

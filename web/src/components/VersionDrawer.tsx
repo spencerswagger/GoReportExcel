@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Drawer, List, Spin, Tag, Typography } from 'antd';
+import { Alert, Drawer, List, Spin } from 'antd';
 import { getVersions, rollback } from '../api/client';
 import type { VersionInfo } from '../api/types';
 
@@ -57,8 +57,17 @@ export function VersionDrawer({ defId }: { defId: string }) {
 
   return (
     <>
-      <Button size="small" onClick={openDrawer}>历史版本</Button>
-      <Drawer title="版本历史" width={420} open={open} onClose={closeDrawer}>
+      <button type="button" className="ate-icon-btn" onClick={openDrawer} aria-label="历史版本">
+        <span className="glyph">◬</span>
+        历史版本
+      </button>
+      <Drawer
+        title={<span style={{ fontFamily: "'Noto Serif SC', serif", fontWeight: 600 }}>版本历史</span>}
+        width={420}
+        open={open}
+        onClose={closeDrawer}
+        styles={{ body: { background: 'var(--paper-bg)' } }}
+      >
         {err && <Alert type="error" showIcon message={err} style={{ marginBottom: 12 }} />}
         {rolled && <Alert type="success" showIcon message={rolled} style={{ marginBottom: 12 }} />}
         <Spin spinning={loading}>
@@ -67,12 +76,29 @@ export function VersionDrawer({ defId }: { defId: string }) {
             renderItem={(v) => (
               <List.Item
                 actions={[
-                  <Button key="rb" size="small" onClick={() => doRollback(v.version)}>回滚</Button>,
+                  <button key="rb" type="button" className="ate-btn sm" onClick={() => doRollback(v.version)}>
+                    回滚
+                  </button>,
                 ]}
               >
-                <Typography.Text>{`v${v.version} · ${v.status}`}</Typography.Text>
-                <Tag color={v.status === 'published' ? 'blue' : 'default'}>{v.status}</Tag>
-                <Typography.Text type="secondary">{v.updated_at} · {v.updated_by}</Typography.Text>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>
+                    v{v.version}
+                    <span
+                      style={{
+                        marginLeft: 8, fontSize: 10, letterSpacing: '.06em', padding: '1px 7px', borderRadius: 999,
+                        color: v.status === 'published' ? 'var(--ok-ink)' : 'var(--ink-dim)',
+                        background: v.status === 'published' ? 'rgba(78,138,90,.12)' : 'var(--paper-bg)',
+                        border: `1px solid ${v.status === 'published' ? 'rgba(78,138,90,.35)' : 'var(--paper-line)'}`,
+                      }}
+                    >
+                      {v.status}
+                    </span>
+                  </span>
+                  <span style={{ fontSize: 11, color: 'var(--ink-faint)', fontFamily: 'var(--font-mono)' }}>
+                    {v.updated_at} · {v.updated_by}
+                  </span>
+                </div>
               </List.Item>
             )}
           />
