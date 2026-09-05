@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { RuleBuilder } from './RuleBuilder';
+import { reorderRules, RuleBuilder, type RuleJSON } from './RuleBuilder';
 import { useEditorStore } from '../store/editor';
 import type { DraftShape } from '../store/editor';
 
@@ -46,4 +46,36 @@ test('toggling rule visibility persists enabled flag', () => {
   const d = useEditorStore.getState().draft as DraftShape;
   const rules = (d.style_rules as { rules: Array<{ enabled?: boolean }> }).rules;
   expect(rules[0].enabled).toBe(false);
+});
+
+describe('reorderRules', () => {
+  const rules: RuleJSON[] = [
+    { id: 'a', priority: 10, when: {}, style: {} },
+    { id: 'b', priority: 20, when: {}, style: {} },
+    { id: 'c', priority: 30, when: {}, style: {} },
+  ];
+
+  test('moves item forward (from < to) and re-prioritizes', () => {
+    const next = reorderRules(rules, 'a', 'c');
+    expect(next.map((r) => r.id)).toEqual(['b', 'c', 'a']);
+    expect(next.map((r) => r.priority)).toEqual([10, 20, 30]);
+  });
+
+  test('moves item backward (from > to) and re-prioritizes', () => {
+    const next = reorderRules(rules, 'c', 'a');
+    expect(next.map((r) => r.id)).toEqual(['c', 'a', 'b']);
+    expect(next.map((r) => r.priority)).toEqual([10, 20, 30]);
+  });
+
+  test('returns same array reference when active id not found', () => {
+    expect(reorderRules(rules, 'missing', 'b')).toBe(rules);
+  });
+
+  test('returns same array reference when over id not found', () => {
+    expect(reorderRules(rules, 'a', 'missing')).toBe(rules);
+  });
+
+  test('returns same array reference when from equals to', () => {
+    expect(reorderRules(rules, 'b', 'b')).toBe(rules);
+  });
 });
