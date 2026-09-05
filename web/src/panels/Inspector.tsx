@@ -11,9 +11,12 @@ export function Inspector() {
   const [stats, setStats] = useState<{ count?: number; formula?: string; type?: string }>({});
   const [applied, setApplied] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [patching, setPatching] = useState(false);
+  const [patchFailed, setPatchFailed] = useState(false);
 
   useEffect(() => {
-    if (!selected) { setExplains([]); setStats({}); return; }
+    setApplied(false);
+    if (!selected) { setExplains([]); setStats({}); setLoading(false); return; }
     let cancelled = false;
     setLoading(true);
     Promise.all([styleExplain(selected, defId), dataTrace(selected, defId)])
@@ -23,18 +26,26 @@ export function Inspector() {
         setStats({ count: tr.trace?.source_count, formula: tr.formula, type: tr.type });
       })
       .catch(() => {})
-      .finally(() => setLoading(false));
+      .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [selected, defId]);
 
   const applyPatch = async () => {
     if (!selected) return;
-    await patchOverride(defId, 'upsert', {
-      id: `ov_${selected.replace(/[^a-zA-Z0-9]/g, '_')}`,
-      scope: {},
-      style_patch: { fill: { color: '#FFF7E6' }, bold: true },
-    });
-    setApplied(true);
+    setPatching(true);
+    setPatchFailed(false);
+    try {
+      await patchOverride(defId, 'upsert', {
+        id: `ov_${selected.replace(/[^a-zA-Z0-9]/g, '_')}`,
+        scope: {},
+        style_patch: { fill: { color: '#FFF7E6' }, bold: true },
+      });
+      setApplied(true);
+    } catch {
+      setPatchFailed(true);
+    } finally {
+      setPatching(false);
+    }
   };
 
   return (
@@ -45,7 +56,7 @@ export function Inspector() {
           <Descriptions size="small" column={1}>
             <Descriptions.Item label="单元格">{selected}</Descriptions.Item>
             <Descriptions.Item label="类型">{stats.type ?? '—'}</Descriptions.Item>
-            <Descriptions.Item label="来源行数">{`来源行数：${stats.count ?? '—'}`}</Descriptions.Item>
+            <Descriptions.Item label="来源行数">{stats.count ?? '—'}</Descriptions.Item>
             {stats.formula && <Descriptions.Item label="公式"><code>{stats.formula}</code></Descriptions.Item>}
           </Descriptions>
           <Typography.Title level={5}>样式解释</Typography.Title>
@@ -55,8 +66,9 @@ export function Inspector() {
               <List.Item><Typography.Text strong>{ex.id}</Typography.Text>：{ex.reason}</List.Item>
             )}
           />
-          <Button size="small" type="primary" style={{ marginTop: 8 }} onClick={applyPatch}>调整此单元格样式</Button>
+          <Button size="small" type="primary" style={{ marginTop: 8 }} loading={patching} onClick={applyPatch}>调整此单元格样式</Button>
           {applied && <Alert style={{ marginTop: 8 }} type="success" showIcon message="已应用（override）" />}
+          {patchFailed && <Alert style={{ marginTop: 8 }} type="error" showIcon message="应用失败" />}
         </Spin>
       )}
     </Card>
