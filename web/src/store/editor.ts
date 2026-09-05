@@ -3,7 +3,7 @@ import type { RenderSchema } from '../api/types';
 
 export type SaveState = 'clean' | 'dirty' | 'saving' | 'conflict';
 
-interface DraftShape {
+export interface DraftShape {
   id: string;
   version: number;
   name: string;
