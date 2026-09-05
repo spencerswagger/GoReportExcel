@@ -1,7 +1,9 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
+import { http, HttpResponse } from 'msw';
 import { useAutosave } from './useAutosave';
 import { useEditorStore } from '../store/editor';
+import { server } from '../api/mock';
 import type { DraftShape } from '../store/editor';
 
 function seed() {
@@ -40,5 +42,21 @@ describe('useAutosave', () => {
     renderHook(() => useAutosave(100));
     await new Promise((r) => setTimeout(r, 400));
     expect(useEditorStore.getState().saveState).toBe('conflict');
+  });
+
+  it('returns to dirty on non-409 save failure', async () => {
+    seed();
+    server.use(
+      http.put('*/api/v1/definitions/:id/draft', () =>
+        HttpResponse.json({ error: 'boom' }, { status: 500 }),
+      ),
+    );
+    const s = useEditorStore.getState();
+    s.checkpoint('t');
+    s.mutateDraft((d) => { d.name = '新名字'; });
+    renderHook(() => useAutosave(100));
+    await waitFor(() => {
+      expect(useEditorStore.getState().saveState).toBe('dirty');
+    }, { timeout: 2000 });
   });
 });

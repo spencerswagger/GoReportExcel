@@ -20,6 +20,7 @@ export default function EditorLayout() {
   const setDraft = useEditorStore((s) => s.setDraft);
   const setRender = useEditorStore((s) => s.setRender);
   const draft = useEditorStore((s) => s.draft);
+  const defId = useEditorStore((s) => s.defId);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -54,12 +55,14 @@ export default function EditorLayout() {
   const selectCell = useEditorStore((s) => s.selectCell);
   const render = useEditorStore((s) => s.render);
   const [published, setPublished] = useState(false);
+  const [publishError, setPublishError] = useState(false);
   const doPublish = async () => {
+    setPublishError(false);
     try {
-      await publish(id!);
+      await publish(defId);
       setPublished(true);
     } catch {
-      /* 保留状态 */
+      setPublishError(true);
     }
   };
 
@@ -88,11 +91,12 @@ export default function EditorLayout() {
             <Alert type="error" showIcon message="保存冲突" description="草稿版本已过期，请刷新后重试" />
           )}
           {published && <Tag color="success">已发布</Tag>}
+          {publishError && <Alert type="error" showIcon message="发布失败" />}
         </Space>
         <Space wrap>
-          <VersionDrawer defId={id!} />
+          <VersionDrawer defId={defId} />
           <Button size="small" type="primary" onClick={doPublish}>发布</Button>
-          <ExportButton defId={id!} />
+          <ExportButton defId={defId} />
         </Space>
       </Space>
       <Row gutter={12} style={{ flex: 1, minHeight: 0 }}>
