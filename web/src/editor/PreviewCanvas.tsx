@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import type { ColInfo, MergeInfo, RenderSchema, RowDTO } from '../api/types';
+import type { CFInfo, ColInfo, MergeInfo, RenderSchema, RowDTO } from '../api/types';
 import { styleSheetCSS } from './StyleSheet';
+import { applyConditional, type CFVisual } from './conditional';
 
 // 选中单元格的可见高亮样式（组件内静态追加，不依赖后端样式字典）
 const SELECTED_CSS = '.cell-selected{outline:2px solid #1677ff;outline-offset:-2px}';
@@ -12,8 +13,31 @@ interface Props {
   onSelect?: (cellId: string) => void;
 }
 
+// 条件格式视觉注记：CFVisual 基础上附带 CF 颜色（data_bar 渐变用）
+interface CFVisualEntry extends CFVisual {
+  color?: string;
+}
+
+// 把 schema.conditional_formats 展开为 cellId → 视觉注记 的查找表。
+// 指标列定位：优先按 role==='metric' 且 metric 字段匹配，缺省回退第 3 列（col=2）。
+function useCFVisuals(schema: RenderSchema): Map<string, CFVisualEntry> {
+  return useMemo(() => {
+    const map = new Map<string, CFVisualEntry>();
+    for (const raw of schema.conditional_formats ?? []) {
+      const cf = raw as CFInfo & { scope?: { metric?: string } };
+      const col = schema.cols.findIndex((c) => c.role === 'metric' && c.metric === cf.scope?.metric);
+      const metricCol = col >= 0 ? col : 2;
+      for (const v of applyConditional(schema.rows, cf, metricCol)) {
+        map.set(v.cellId, { ...v, color: cf.color });
+      }
+    }
+    return map;
+  }, [schema]);
+}
+
 export default function PreviewCanvas({ schema, selectedCell, onSelect }: Props) {
   const css = useMemo(() => styleSheetCSS(schema.styles), [schema.styles]);
+  const cfVisuals = useCFVisuals(schema);
   const scrollRef = useRef<HTMLDivElement>(null);
   const styleRef = useRef<HTMLStyleElement>(null);
   const rowHeight = 24;
@@ -82,7 +106,8 @@ export default function PreviewCanvas({ schema, selectedCell, onSelect }: Props)
                   <CellBox key={col.idx} cell={cell} cols={schema.cols}
                     selected={selectedCell === cell.cell_id} onSelect={onSelect}
                     mergeFrom={m.r2 > m.r1 ? m.r1 : undefined}
-                    mergeTo={m.r2 > m.r1 ? m.r2 : undefined} />
+                    mergeTo={m.r2 > m.r1 ? m.r2 : undefined}
+                    cf={cfVisuals.get(cell.cell_id)} />
                 );
               })}
             </div>
@@ -112,13 +137,15 @@ function mergeOf(mergeByCol: Map<number, MergeInfo[]>, col: number, rowIdx: numb
   return { anchor: true, r1: rowIdx, r2: rowIdx };
 }
 
-function CellBox({ cell, cols, selected, onSelect, mergeFrom, mergeTo }: {
+function CellBox({ cell, cols, selected, onSelect, mergeFrom, mergeTo, cf }: {
   cell: RowDTO['cells'][number]; cols: ColInfo[]; selected: boolean;
   onSelect?: (c: string) => void; mergeFrom?: number; mergeTo?: number;
+  cf?: CFVisualEntry;
 }) {
   // 对齐方式取自 schema.cols 的 align 配置，不再硬编码列号
   const textAlign = cols[cell.col]?.align === 'right' ? 'right' : 'left';
   const width = (cols[cell.col]?.width ?? 0) * 7;
+  const cfStyle = cf ? cfStyleOf(cf) : undefined;
   return (
     <div
       data-cell={cell.cell_id}
@@ -130,6 +157,7 @@ function CellBox({ cell, cols, selected, onSelect, mergeFrom, mergeTo }: {
         padding: '2px 8px', whiteSpace: 'nowrap', overflow: 'hidden',
         textOverflow: 'ellipsis', cursor: 'pointer', boxSizing: 'border-box', flexShrink: 0,
         display: 'flex', alignItems: 'center',
+        ...cfStyle,
       }}
       title={cell.formula || cell.display}
       onClick={() => onSelect?.(cell.cell_id)}
@@ -137,4 +165,14 @@ function CellBox({ cell, cols, selected, onSelect, mergeFrom, mergeTo }: {
       {cell.formula || cell.display}
     </div>
   );
+}
+
+// 命中单元格附加内联样式：data_bar → 背景渐变数据条；color_scale/top_n → 背景填充
+function cfStyleOf(cf: CFVisualEntry): CSSProperties {
+  if (cf.kind === 'data_bar' && typeof cf.width === 'number') {
+    const color = cf.color ?? '#638EC6';
+    return { background: `linear-gradient(90deg, ${color} ${cf.width * 100}%, transparent 0)` };
+  }
+  if (cf.background) return { background: cf.background };
+  return {};
 }

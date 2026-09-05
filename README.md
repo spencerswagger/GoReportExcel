@@ -71,6 +71,18 @@ go run ./cmd/reportserv -addr :8080 -db catalog.db -artifacts artifacts -csv .
 
 核心流程：`PUT /v1/definitions/{id}/draft` 保存草稿 → `POST /v1/definitions/{id}/publish` 发布 → `POST /v1/export` 提交异步导出 → `GET /v1/export/{taskId}/download` 下载。
 
+## 管理端前端（计划三）
+
+```bash
+cd web
+npm install
+npm run dev      # 开发服务（MSW mock 后端 API，端口 5173）
+npm test         # Vitest（MSW 契约测试）
+npm run build    # 产物 dist/（对接真实后端时关闭 mock 并配置 VITE_API_BASE）
+```
+
+编辑器路由 `/editor/:id`：左栏配置（维度排序/指标/样式规则图层/条件格式/页面设置）、中栏实时预览（样式字典 CSS、合并、条件格式 JS 模拟、虚拟滚动）、右栏检查器（样式解释/数据血缘/预览直改生成 override）。顶栏支持防抖自动保存、发布、版本历史与回滚、异步导出（轮询进度 + 下载）。
+
 ## 报表定义示例
 
 ```json
@@ -146,4 +158,4 @@ go vet ./...
 
 - [x] 计划一：核心引擎（聚合/风格 DSL/RenderSchema/渲染/CLI）—— 已交付
 - [ ] 计划二：服务化（HTTP API/定义版本与热更新/异步导出/条件格式/预览交互）—— 计划已完成，待实施
-- [ ] 计划三：管理端前端（规则构建器/图层面板/实时预览/版本管理）
+- [x] 计划三：管理端前端（规则构建器/图层面板/实时预览/版本管理）

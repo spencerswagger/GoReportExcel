@@ -13,6 +13,7 @@ import { ConditionalFormatsPanel } from '../panels/ConditionalFormatsPanel';
 import { PageSetupPanel } from '../panels/PageSetupPanel';
 import { Inspector } from '../panels/Inspector';
 import PreviewCanvas from './PreviewCanvas';
+import { applyTheme, listThemes } from '../themes';
 
 export default function EditorLayout() {
   const { id } = useParams<{ id: string }>();
@@ -56,6 +57,18 @@ export default function EditorLayout() {
   const render = useEditorStore((s) => s.render);
   const [published, setPublished] = useState(false);
   const [publishError, setPublishError] = useState(false);
+
+  // 套用主题：checkpoint 记录撤销点后，把主题规则合并进草稿（applyTheme 已深拷贝）
+  const applyThemeDraft = (themeId: string) => {
+    const s = useEditorStore.getState();
+    if (!s.draft) return;
+    s.checkpoint(`套用主题 ${themeId}`);
+    s.mutateDraft((d) => {
+      const merged = applyTheme(d as unknown as Record<string, unknown>, themeId);
+      Object.assign(d, merged);
+    });
+  };
+
   const doPublish = async () => {
     setPublishError(false);
     try {
@@ -97,6 +110,9 @@ export default function EditorLayout() {
           <VersionDrawer defId={defId} />
           <Button size="small" type="primary" onClick={doPublish}>发布</Button>
           <ExportButton defId={defId} />
+          {listThemes().map((t) => (
+            <Button key={t.id} size="small" onClick={() => applyThemeDraft(t.id)}>套用{t.name}</Button>
+          ))}
         </Space>
       </Space>
       <Row gutter={12} style={{ flex: 1, minHeight: 0 }}>
