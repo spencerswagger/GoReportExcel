@@ -1,8 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Button, Col, Layout, Row, Spin } from 'antd';
+import { Alert, Button, Col, Row, Space, Spin, Tag, Typography } from 'antd';
 import { useParams } from 'react-router-dom';
-import { getDraft, renderPreview } from '../api/client';
+import { getDraft, publish, renderPreview } from '../api/client';
 import { useEditorStore } from '../store/editor';
+import { useAutosave } from '../hooks/useAutosave';
+import { VersionDrawer } from '../components/VersionDrawer';
+import { ExportButton } from '../components/ExportButton';
+import { DimensionsPanel } from '../panels/DimensionsPanel';
+import { MetricsPanel } from '../panels/MetricsPanel';
+import { RuleBuilder } from '../panels/RuleBuilder';
+import { ConditionalFormatsPanel } from '../panels/ConditionalFormatsPanel';
+import { PageSetupPanel } from '../panels/PageSetupPanel';
+import { Inspector } from '../panels/Inspector';
+import PreviewCanvas from './PreviewCanvas';
 
 export default function EditorLayout() {
   const { id } = useParams<{ id: string }>();
@@ -37,6 +47,22 @@ export default function EditorLayout() {
 
   useEffect(() => load(), [load]);
 
+  useAutosave(300);
+  const saveState = useEditorStore((s) => s.saveState);
+  const baseVersion = useEditorStore((s) => s.baseVersion);
+  const selectedCell = useEditorStore((s) => s.selectedCell);
+  const selectCell = useEditorStore((s) => s.selectCell);
+  const render = useEditorStore((s) => s.render);
+  const [published, setPublished] = useState(false);
+  const doPublish = async () => {
+    try {
+      await publish(id!);
+      setPublished(true);
+    } catch {
+      /* 保留状态 */
+    }
+  };
+
   if (error) {
     return (
       <div style={{ padding: 48, textAlign: 'center' }}>
@@ -50,10 +76,46 @@ export default function EditorLayout() {
     return <div style={{ padding: 48, textAlign: 'center' }}><Spin size="large" tip="加载定义…" /></div>;
   }
   return (
-    <Row gutter={12} style={{ height: 'calc(100vh - 120px)' }}>
-      <Col span={6}>配置面板（后续任务实现）</Col>
-      <Col span={13}><Layout style={{ height: '100%', background: '#fff' }}>预览画布（后续任务实现）</Layout></Col>
-      <Col span={5}>检查器（后续任务实现）</Col>
-    </Row>
+    <div style={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column' }}>
+      <Space style={{ marginBottom: 12, width: '100%', justifyContent: 'space-between' }} wrap>
+        <Space wrap>
+          <Typography.Text strong>{draft.name}</Typography.Text>
+          <Tag>v{baseVersion}</Tag>
+          {saveState === 'saving' && <Tag color="processing">保存中</Tag>}
+          {saveState === 'dirty' && <Tag color="warning">未保存</Tag>}
+          {saveState === 'clean' && <Tag color="success">已保存</Tag>}
+          {saveState === 'conflict' && (
+            <Alert type="error" showIcon message="保存冲突" description="草稿版本已过期，请刷新后重试" />
+          )}
+          {published && <Tag color="success">已发布</Tag>}
+        </Space>
+        <Space wrap>
+          <VersionDrawer defId={id!} />
+          <Button size="small" type="primary" onClick={doPublish}>发布</Button>
+          <ExportButton defId={id!} />
+        </Space>
+      </Space>
+      <Row gutter={12} style={{ flex: 1, minHeight: 0 }}>
+        <Col span={6} style={{ overflow: 'auto', height: '100%' }}>
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <DimensionsPanel />
+            <MetricsPanel />
+            <RuleBuilder />
+            <ConditionalFormatsPanel />
+            <PageSetupPanel />
+          </Space>
+        </Col>
+        <Col span={13}>
+          {render ? (
+            <PreviewCanvas schema={render} selectedCell={selectedCell} onSelect={selectCell} />
+          ) : (
+            <div style={{ padding: 48, textAlign: 'center' }}>暂无预览</div>
+          )}
+        </Col>
+        <Col span={5}>
+          <Inspector />
+        </Col>
+      </Row>
+    </div>
   );
 }
