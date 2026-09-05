@@ -113,6 +113,22 @@ test('ConditionalFormatsPanel lists cf entries from draft', () => {
   expect(screen.getByText('data_bar')).toBeTruthy();
 });
 
+test('ConditionalFormatsPanel add button appends cf entry and marks dirty', () => {
+  const s = useEditorStore.getState();
+  s.setDraft({
+    ...seededDraft(),
+    conditional_formats: [{ id: 'cf1', scope: { metric: 'amount' }, kind: 'data_bar', color: '#638EC6' }],
+  } as DraftShape, 2);
+  render(<ConditionalFormatsPanel />);
+  fireEvent.click(screen.getByRole('button', { name: /添\s*加/ }));
+  const d = useEditorStore.getState().draft as DraftShape;
+  const cfs = d.conditional_formats as Array<{ id: string }>;
+  expect(cfs).toHaveLength(2);
+  expect(cfs[1].id).toBe('cf_2');
+  expect(screen.getByText('cf_2')).toBeTruthy();
+  expect(useEditorStore.getState().saveState).toBe('dirty');
+});
+
 test('PageSetupPanel shows orientation and toggles landscape', () => {
   const s = useEditorStore.getState();
   s.setDraft(seededDraft(), 2);
