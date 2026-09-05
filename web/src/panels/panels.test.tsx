@@ -1,6 +1,8 @@
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { DimensionsPanel, reorderDims } from './DimensionsPanel';
 import { MetricsPanel } from './MetricsPanel';
+import { ConditionalFormatsPanel } from './ConditionalFormatsPanel';
+import { PageSetupPanel } from './PageSetupPanel';
 import { useEditorStore } from '../store/editor';
 import type { DraftShape } from '../store/editor';
 import type { DimensionDef } from '../store/types';
@@ -98,4 +100,28 @@ describe('reorderDims', () => {
   test('returns same array when from equals to', () => {
     expect(reorderDims(dims, 'b', 'b')).toBe(dims);
   });
+});
+
+test('ConditionalFormatsPanel lists cf entries from draft', () => {
+  const s = useEditorStore.getState();
+  s.setDraft({
+    ...seededDraft(),
+    conditional_formats: [{ id: 'cf1', scope: { metric: 'amount' }, kind: 'data_bar', color: '#638EC6' }],
+  } as DraftShape, 2);
+  render(<ConditionalFormatsPanel />);
+  expect(screen.getByText('cf1')).toBeTruthy();
+  expect(screen.getByText('data_bar')).toBeTruthy();
+});
+
+test('PageSetupPanel shows orientation and toggles landscape', () => {
+  const s = useEditorStore.getState();
+  s.setDraft(seededDraft(), 2);
+  render(<PageSetupPanel />);
+  expect(screen.getByText('纵向')).toBeTruthy();
+  fireEvent.mouseDown(screen.getByRole('combobox'));
+  fireEvent.click(screen.getByText('横向'));
+  const d = useEditorStore.getState().draft as DraftShape;
+  const lo = d.layout_opts as { print?: { orientation?: string } };
+  expect(lo.print?.orientation).toBe('landscape');
+  expect(useEditorStore.getState().saveState).toBe('dirty');
 });
