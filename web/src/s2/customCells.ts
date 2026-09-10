@@ -48,15 +48,18 @@ export function cellIdOf(meta: { __cellId?: string }): string {
   return meta.__cellId ?? '';
 }
 
-// 全局样式表查找闭包，由 PreviewSheet 注入
-let globalStyleLookup: CellStyleLookup | null = null;
+// 样式查找表按 spreadsheet 实例挂载（WeakMap），避免模块级全局跨 Sheet/多实例/HMR 串稿。
+// WeakMap 以实例为键，实例被回收后自动 GC，无泄漏、不污染实例属性。
+const styleLookups = new WeakMap<object, CellStyleLookup>();
 
-export function setCellStyleLookup(lookup: CellStyleLookup): void {
-  globalStyleLookup = lookup;
+// 绑定到具体 spreadsheet 实例（PreviewSheet 在挂载时调用）
+export function setCellStyleLookup(spreadsheet: object, lookup: CellStyleLookup): void {
+  styleLookups.set(spreadsheet, lookup);
 }
 
-export function getCellStyleLookup(): CellStyleLookup | null {
-  return globalStyleLookup;
+// 按实例取回样式查找表（未绑定返回 undefined）
+export function getCellStyleLookup(spreadsheet: object): CellStyleLookup | undefined {
+  return styleLookups.get(spreadsheet);
 }
 
 // 在当前 Group 上绘制逐格背景填充 + 四边线型边框（来自 ResolvedStyle）
@@ -109,7 +112,7 @@ export class ReportDataCell extends DataCell {
 
   protected drawBackgroundShape(): void {
     const cellId = cellIdOf(this.meta as unknown as { __cellId?: string });
-    const style = cellId ? globalStyleLookup?.styleOf(cellId) : undefined;
+    const style = cellId ? getCellStyleLookup(this.spreadsheet)?.styleOf(cellId) : undefined;
     drawStyledBackground(this, () => super.drawBackgroundShape(), () => this.getBBoxByType(), style);
   }
 }
@@ -122,7 +125,7 @@ export class ReportRowCell extends RowCell {
 
   protected drawBackgroundShape(): void {
     const cellId = cellIdOf(this.meta as unknown as { __cellId?: string });
-    const style = cellId ? globalStyleLookup?.styleOf(cellId) : undefined;
+    const style = cellId ? getCellStyleLookup(this.spreadsheet)?.styleOf(cellId) : undefined;
     drawStyledBackground(this, () => super.drawBackgroundShape(), () => this.getBBoxByType(), style);
   }
 
@@ -130,7 +133,8 @@ export class ReportRowCell extends RowCell {
   protected getContentIndent(): number {
     const baseIndent = super.getContentIndent();
     const cellId = cellIdOf(this.meta as unknown as { __cellId?: string });
-    const customIndent = cellId ? (globalStyleLookup?.indentOf(cellId) ?? 0) : 0;
+    const customIndent = cellId ? (getCellStyleLookup(this.spreadsheet)?.indentOf(cellId) ?? 0) : 0;
+    // 缩进单位 10px（与旧画布 StyleSheet 一致），未来缩放/字号调整时注意
     return baseIndent + customIndent * 10;
   }
 
@@ -152,7 +156,7 @@ export class ReportColCell extends ColCell {
 
   protected drawBackgroundShape(): void {
     const cellId = cellIdOf(this.meta as unknown as { __cellId?: string });
-    const style = cellId ? globalStyleLookup?.styleOf(cellId) : undefined;
+    const style = cellId ? getCellStyleLookup(this.spreadsheet)?.styleOf(cellId) : undefined;
     drawStyledBackground(this, () => super.drawBackgroundShape(), () => this.getBBoxByType(), style);
   }
 
@@ -160,7 +164,7 @@ export class ReportColCell extends ColCell {
   protected getTextStyle() {
     const baseStyle = super.getTextStyle();
     const cellId = cellIdOf(this.meta as unknown as { __cellId?: string });
-    const style = cellId ? globalStyleLookup?.styleOf(cellId) : undefined;
+    const style = cellId ? getCellStyleLookup(this.spreadsheet)?.styleOf(cellId) : undefined;
     if (style?.Bold) {
       return { ...baseStyle, fontWeight: 'bold' as const };
     }
