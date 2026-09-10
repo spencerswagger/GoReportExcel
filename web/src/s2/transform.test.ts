@@ -162,4 +162,12 @@ describe('buildPreview data model', () => {
     expect(cf.mapping(100, m.records[0])).toBeNull(); // 非命中
     expect(cf.mapping(200)).toBeNull(); // 无 data
   });
+
+  it('options.totals 启用小计/总计并标注中文文本', () => {
+    const m = buildPreview(fixtureSchema, 'grid');
+    expect(m.options.totals?.row?.showGrandTotals).toBe(true);
+    expect(m.options.totals?.row?.showSubTotals).toBe(true);
+    expect(m.options.totals?.row?.grandTotalsLabel).toBe('总计');
+    expect(m.options.totals?.row?.subTotalsDimensions).toEqual(['dim_0', 'dim_1']);
+  });
 });

@@ -197,8 +197,22 @@ export function buildPreview(
     fields.values = [];
   }
 
+  // data-provided totals 需开启 options.totals 才展示：小计/总计以省略维度键的 records 提供（优先），
+  // 未提供记录的层级（fixture 简化数据）由 S2 按 calcXxx 补算
+  const dimFields = dimCols.map(dimKey);
   const options: SheetComponentOptions = {
     hierarchyType,
+    totals: {
+      row: {
+        showGrandTotals: true,
+        showSubTotals: true,
+        grandTotalsLabel: '总计',
+        subTotalsLabel: '小计',
+        subTotalsDimensions: dimFields,
+        calcGrandTotals: { aggregation: 'SUM' },
+        calcSubTotals: { aggregation: 'SUM' },
+      },
+    },
     conditions: buildConditions(schema, records),
     style: {
       colCell: {
