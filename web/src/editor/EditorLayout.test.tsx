@@ -5,8 +5,10 @@ import { useEditorStore } from '../store/editor';
 
 // jsdom 不需要真实 S2 canvas，mock PreviewSheet 仅验证 props.schema 传入即可
 vi.mock('../s2/PreviewSheet', () => ({
-  default: (props: { schema?: { report?: { row_total?: number } } }) => (
-    <div data-testid="preview-sheet-mock">{(props.schema?.report?.row_total ?? '')}</div>
+  default: (props: { schema?: { report?: { row_total?: number } }; hierarchyType?: string }) => (
+    <div data-testid="preview-sheet-mock" data-hierarchy={props.hierarchyType ?? ''}>
+      {props.schema?.report?.row_total ?? ''}
+    </div>
   ),
 }));
 
@@ -89,6 +91,8 @@ test('hierarchy segmented persists preview.hierarchy_type into draft and undo re
     const d = useEditorStore.getState().draft as unknown as { preview?: { hierarchy_type?: string } };
     expect(d.preview?.hierarchy_type).toBe('tree');
   });
+  // 形态切换传导：mock 元素 data-hierarchy 反映当前 hierarchyType
+  expect(screen.getByTestId('preview-sheet-mock').getAttribute('data-hierarchy')).toBe('tree');
   fireEvent.click(screen.getByText('撤销'));
   await waitFor(() => {
     const d = useEditorStore.getState().draft as unknown as { preview?: { hierarchy_type?: string } };

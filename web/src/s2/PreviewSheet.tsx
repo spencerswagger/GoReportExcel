@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { SheetComponent, type SheetComponentOptions } from '@antv/s2-react';
 import type { S2Theme, TargetCellInfo, ViewMeta } from '@antv/s2';
 import '@antv/s2-react/dist/s2-react.min.css';
@@ -7,7 +7,7 @@ import type { PreviewHierarchyType } from './hierarchy';
 import { buildPreview, type PreviewRecord } from './transform';
 import {
   ReportDataCell, ReportRowCell, ReportColCell,
-  makeCellLookup, setCellStyleLookup,
+  makeCellLookup, setCellStyleLookup, setSelectedCell,
 } from './customCells';
 import { buildBaseTheme } from './s2Theme';
 
@@ -27,9 +27,10 @@ interface ClickMeta {
   __cellId?: string;
 }
 
-export default function PreviewSheet({ schema, hierarchyType = 'grid', zoom = 1, onSelect }: Props) {
+export default function PreviewSheet({ schema, hierarchyType = 'grid', zoom = 1, selectedCell, onSelect }: Props) {
   const model = useMemo(() => buildPreview(schema, hierarchyType), [schema, hierarchyType]);
   const lookup = useMemo(() => makeCellLookup(model), [model]);
+  const s2Ref = useRef<object | null>(null);
 
   // 元信息 → cell_id：优先命中已注入的 __cellId，否则按 record 索引 + 字段名回查记录
   const resolveCellId = (meta: ClickMeta): string | undefined => {
@@ -76,7 +77,16 @@ export default function PreviewSheet({ schema, hierarchyType = 'grid', zoom = 1,
 
   const handleMounted = (instance: object): void => {
     setCellStyleLookup(instance, lookup);
+    s2Ref.current = instance;
   };
+
+  // 选中变化 → 按实例传导并轻量重绘，使数据格选中高亮（金色描边）即时显现
+  useEffect(() => {
+    if (s2Ref.current) {
+      setSelectedCell(s2Ref.current, selectedCell ?? null);
+      (s2Ref.current as unknown as { render?: (re?: boolean) => Promise<void> | void }).render?.(false);
+    }
+  }, [selectedCell]);
 
   return (
     <div

@@ -62,6 +62,19 @@ export function getCellStyleLookup(spreadsheet: object): CellStyleLookup | undef
   return styleLookups.get(spreadsheet);
 }
 
+// 当前选中数据格（按 spreadsheet 实例隔离的 WeakMap，与 styleLookups 同模式）。
+// WeakMap 以实例为键，实例被回收后自动 GC，无泄漏、不污染实例属性。
+const selectedLookups = new WeakMap<object, string | null>();
+
+export function setSelectedCell(spreadsheet: object, cellId: string | null): void {
+  selectedLookups.set(spreadsheet, cellId);
+}
+
+// 按实例取回选中单元格（未绑定返回 undefined，与未选中 null 区分）
+export function getSelectedCell(spreadsheet: object): string | null | undefined {
+  return selectedLookups.get(spreadsheet);
+}
+
 // 在当前 Group 上绘制逐格背景填充 + 四边线型边框（来自 ResolvedStyle）
 // fallback 无样式时回调（各基类的默认背景绘制）
 function drawStyledBackground(
@@ -114,6 +127,23 @@ export class ReportDataCell extends DataCell {
     const cellId = cellIdOf(this.meta as unknown as { __cellId?: string });
     const style = cellId ? getCellStyleLookup(this.spreadsheet)?.styleOf(cellId) : undefined;
     drawStyledBackground(this, () => super.drawBackgroundShape(), () => this.getBBoxByType(), style);
+
+    // 选中高亮：选中变化经 setSelectedCell 按实例传导，此处与当前格的 cell_id 匹配时
+    // 叠加一圈金色外边描边（沿用旧画布选中语义），绘制在背景填充之后避免被盖住。
+    if (cellId && getSelectedCell(this.spreadsheet) === cellId) {
+      const { x, y, width, height } = this.getBBoxByType();
+      this.appendChild(
+        new Rect({
+          style: {
+            x, y, width, height,
+            fill: 'transparent',
+            stroke: '#C8923E',
+            lineWidth: 2,
+            lineDash: undefined,
+          },
+        }),
+      );
+    }
   }
 }
 
