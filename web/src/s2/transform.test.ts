@@ -76,6 +76,31 @@ describe('buildPreview data model', () => {
     expect(amount).toBeTruthy();
   });
 
+  it('data_bar → conditions.interval（用后端 stats 定范围）', () => {
+    const m = buildPreview(fixtureSchema, 'grid');
+    const interval = m.options.conditions?.interval ?? [];
+    const cf = interval[0] as { field: string; mapping: (v: number) => { fill: string; isCompare: boolean; minValue?: number; maxValue?: number } };
+    expect(cf.field).toBe('amount');
+    const r = cf.mapping(500);
+    expect(r.fill).toBe('#638EC6');
+    expect(r.isCompare).toBe(true);
+    expect(r.minValue).toBe(0);
+    expect(r.maxValue).toBe(1000);
+  });
+
+  it('color_scale → conditions.background 插值色', () => {
+    const schema = structuredClone(fixtureSchema);
+    schema.conditional_formats = [
+      { id: 'cs', kind: 'color_scale', color: '#C0392B', ranges: ['C2:C11'], stats: { min: 0, max: 100 } },
+    ];
+    const m = buildPreview(schema, 'grid');
+    const bg = m.options.conditions?.background ?? [];
+    const cf = bg[0] as { field: string; mapping: (v: number) => { fill: string } | null };
+    expect(cf.field).toBe('amount');
+    expect(cf.mapping(0)).toEqual({ fill: '#FFFFFF' });
+    expect(cf.mapping(100)).toEqual({ fill: '#C0392B' });
+  });
+
   it('detail 行维度值为空也照常写入维度键（保持 detail 语义）', () => {
     const schema = structuredClone(fixtureSchema);
     // 把第 2 行（物理 idx 2，上海 detail，record 0）的大区维度值置空
