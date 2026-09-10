@@ -46,9 +46,10 @@ export function buildPreview(
         rec.__cellIds[key] = cell.cell_id;
       } else {
         rec.__dimCellIds[key] = cell.cell_id;
-        // 小计/总计行的空维度单元格 → 省略键（data-provided totals 语法，T3 细化断言）
+        // data-provided totals 语法：total 行省略全部维度键；subtotal 行省略空值维度键
         const v = cell.value;
-        if (v !== '' && v !== null && v !== undefined) rec[key] = v;
+        const omitDim = row.type === 'total' || (v === '' || v === null || v === undefined);
+        if (!omitDim) rec[key] = v;
       }
     }
     return rec;

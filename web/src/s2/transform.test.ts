@@ -32,4 +32,25 @@ describe('buildPreview data model', () => {
     const fmt = amountMeta?.formatter as (v: unknown, d?: Record<string, unknown>) => string;
     expect(fmt?.(100, m.records[0])).toBe('100.00');
   });
+
+  it('subtotal 记录省略空维度键（data-provided totals）', () => {
+    const m = buildPreview(fixtureSchema, 'grid');
+    // records: idx2=上海detail(record0)... recordings: subtotal 上海=record2(idx4), 杭州=record5(idx7), 南京=record8(idx10), total=record9(idx11)
+    const sh = m.records[2];
+    expect(sh.__row.type).toBe('subtotal');
+    expect(sh.amount).toBe(300);
+    expect(sh.__cellIds.amount).toBe('r4c2');
+    expect('dim_0' in sh).toBe(false); // 空维度键省略（上海小计行的 region 单元格 value ''）
+    expect(sh.dim_1).toBe('上海');      // 非空维度值保留
+  });
+
+  it('total 记录无条件省略全部维度键（即使首列有"总计"文本）', () => {
+    const m = buildPreview(fixtureSchema, 'grid');
+    const total = m.records[9];
+    expect(total.__row.type).toBe('total');
+    expect(total.amount).toBe(1000);
+    expect('dim_0' in total).toBe(false);
+    expect('dim_1' in total).toBe(false);
+    expect(total.__cellIds.amount).toBe('r11c2');
+  });
 });
