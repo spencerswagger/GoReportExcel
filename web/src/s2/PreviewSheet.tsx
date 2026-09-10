@@ -44,17 +44,29 @@ export default function PreviewSheet({ schema, hierarchyType = 'grid', zoom = 1,
 
   // 自定 data/row/col 单元格渲染，并对数据格 meta 注入 __cellId（customCells 读取）
   // 行/列头为 Node 元信息（无 ViewMeta 的 rowIndex/valueField），暂依赖点击时回查
+  // 把 lookup 的绑定时机提前到 cell 工厂闭包内：s2-react 的 useSpreadSheet 先 await s2.render()
+  // 再调 onMounted，而单元格类在 render 阶段读 getCellStyleLookup(this.spreadsheet) 得到 undefined，
+  // 导致逐格样式（填充/边框/缩进/加粗）首屏缺位。工厂在 cell 构造期间执行，先绑定后构造可保证首帧命中。
   const options = useMemo<SheetComponentOptions>(() => ({
     ...model.options,
-    dataCell: (viewMeta, s2) => new ReportDataCell(viewMeta, s2),
-    rowCell: (node, s2, headerConfig) => new ReportRowCell(node, s2, headerConfig),
-    colCell: (node, s2, headerConfig) => new ReportColCell(node, s2, headerConfig),
+    dataCell: (viewMeta, s2) => {
+      setCellStyleLookup(s2, lookup);
+      return new ReportDataCell(viewMeta, s2);
+    },
+    rowCell: (node, s2, headerConfig) => {
+      setCellStyleLookup(s2, lookup);
+      return new ReportRowCell(node, s2, headerConfig);
+    },
+    colCell: (node, s2, headerConfig) => {
+      setCellStyleLookup(s2, lookup);
+      return new ReportColCell(node, s2, headerConfig);
+    },
     layoutCellMeta: (viewMeta: ViewMeta) => {
       const cellId = resolveCellId(viewMeta as ClickMeta);
       if (cellId) (viewMeta as ViewMeta & { __cellId: string }).__cellId = cellId;
       return viewMeta;
     },
-  }), [model]);
+  }), [model, lookup]);
 
   // 点击回调：把 S2 单元格元信息回溯到业务 cell_id 并交给上层
   const handleCellClick = (data: TargetCellInfo): void => {
@@ -76,6 +88,7 @@ export default function PreviewSheet({ schema, hierarchyType = 'grid', zoom = 1,
         transformOrigin: 'top left',
       }}
     >
+      {/* buildBaseTheme 返回 Partial<S2Theme>，运行时合并 S2 默认主题，断言仅为过类型 */}
       <SheetComponent
         sheetType={model.sheetType}
         dataCfg={model.dataCfg}
