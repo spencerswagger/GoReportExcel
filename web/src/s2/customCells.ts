@@ -187,11 +187,15 @@ export class ReportRowCell extends RowCell {
   // 合并单元格：grid 模式维度列纵向合并，覆盖行（合并区间内非锚点）空白、锚点显示文本、区间外照常展示
   // rowIndex 取 Node 的 rowIndex（若为 undefined 退化显示文本）
   drawTextShape(): void {
-    const node = this.meta as unknown as { level?: number; rowIndex?: number };
+    const node = this.meta as unknown as {
+      level?: number; rowIndex?: number;
+      isSubTotals?: boolean; isGrandTotals?: boolean;
+    };
     if (node.level !== undefined && node.rowIndex !== undefined) {
       const merge = getCellStyleLookup(this.spreadsheet)?.mergeOf(node.level, node.rowIndex);
-      if (merge?.covered) {
-        return; // 覆盖行：背景/边框仍绘制，仅隐藏文本
+      // 计算型小计/总计节点由 S2 绘制自身 label，豁免合并隐藏，避免依赖 fixture 空 label 的偶然性
+      if (merge?.covered && !node.isSubTotals && !node.isGrandTotals) {
+        return; // 覆盖行：背景/边框仍绘制，仅隐藏非锚点明细行文本
       }
     }
     super.drawTextShape();
