@@ -111,4 +111,50 @@ describe('buildPreview data model', () => {
     expect('dim_0' in rec).toBe(true);
     expect(rec.dim_0).toBe('');
   });
+
+  it('0 维度 → table sheet，columns=指标字段，values 空', () => {
+    const schema = structuredClone(fixtureSchema);
+    schema.cols = schema.cols.filter((c) => c.role === 'metric').map((c, i) => ({ ...c, idx: i }));
+    schema.rows = schema.rows.map((r) => ({
+      ...r,
+      cells: r.cells.filter((c) => c.col >= 2).map((c) => ({ ...c, col: c.col - 2 })),
+    }));
+    const m = buildPreview(schema, 'grid');
+    expect(m.sheetType).toBe('table');
+    expect(m.dataCfg.fields.columns).toEqual(['amount', 'qty']);
+    expect(m.dataCfg.fields.values).toEqual([]);
+    expect(m.dataCfg.fields.rows).toEqual([]);
+    expect(m.records.length).toBe(10);
+  });
+
+  it('options 提供列宽 widthByField（指标列，px）', () => {
+    const m = buildPreview(fixtureSchema, 'grid');
+    const widths = m.options.style?.colCell?.widthByField as Record<string, number> | undefined;
+    expect(widths?.amount).toBe(120);
+    expect(widths?.qty).toBe(80);
+  });
+
+  it('dimMerges 守卫：数据区列与倒序区间被跳过', () => {
+    const schema = structuredClone(fixtureSchema);
+    schema.merges = [...(schema.merges ?? []), { r1: 2, r2: 2, c: 3 }, { r1: 5, r2: 3, c: 1 }];
+    // c:3 → 0-based col 2 = 销售额（指标列，level 无）→ 跳过；{r1:5,r2:3} 倒序 → 跳过
+    const m = buildPreview(schema, 'grid');
+    expect(m.dimMerges.length).toBe(2);
+  });
+
+  it('top_n → conditions.background 命中集合', () => {
+    const schema = structuredClone(fixtureSchema);
+    schema.conditional_formats = [
+      { id: 'cf_top', kind: 'top_n', n: 2, style: { fill: { color: '#FDEBD0' } }, ranges: ['C2:C11'] },
+    ] as typeof fixtureSchema.conditional_formats;
+    const m = buildPreview(schema, 'grid');
+    const bg = m.options.conditions?.background ?? [];
+    const cf = bg.find((c) => (c as { field?: string }).field === 'amount') as {
+      mapping: (v: number, data?: Record<string, unknown>) => { fill: string } | null;
+    };
+    expect(cf.mapping(1000, m.records[9])).toEqual({ fill: '#FDEBD0' }); // 总金额最大
+    expect(cf.mapping(400, m.records[8])).toEqual({ fill: '#FDEBD0' }); // 南京小计第二
+    expect(cf.mapping(100, m.records[0])).toBeNull(); // 非命中
+    expect(cf.mapping(200)).toBeNull(); // 无 data
+  });
 });

@@ -15,7 +15,7 @@ export interface PreviewRecord extends Record<string, unknown> {
 }
 
 // 将 RenderSchema 的平铺行列重建为 S2 数据模型（fields + data + meta）
-// hierarchyType 本任务暂不使用，T4 起用于层级展示，故保留在签名中
+// hierarchyType 用于层级展示（grid / tree），透传给 options.hierarchyType
 const dimKey = (col: ColInfo): string => col.metric ?? `dim_${col.idx}`;
 
 // 维度合并：把 Excel 1-based 合并区间映射为 bodyRows 的 record 索引区间
@@ -66,6 +66,7 @@ function buildHeaderStyles(schema: RenderSchema): Record<string, string> {
 }
 
 // 将后端条件格式 CFInfo 映射为 S2 conditions（text 右对齐 + interval 数据条 + background 色阶/前 N）
+// 注意：S2 conditions 为字段级，无法表达子集范围；cf.ranges 的子集范围语义降级为整列套用（与旧画布一致处仅限整列范围）
 function buildConditions(
   schema: RenderSchema,
   records: PreviewRecord[],
@@ -133,7 +134,7 @@ export interface PreviewModel {
 
 export function buildPreview(
   schema: RenderSchema,
-  _hierarchyType: PreviewHierarchyType = 'grid',
+  hierarchyType: PreviewHierarchyType = 'grid',
 ): PreviewModel {
   const dimCols = schema.cols.filter((c) => c.role === 'dimension');
   const metricCols = schema.cols.filter((c) => c.role === 'metric');
@@ -188,14 +189,30 @@ export function buildPreview(
   ];
 
   const sheetType: 'pivot' | 'table' = fields.rows.length === 0 ? 'table' : 'pivot';
+  // 0 维度报表回退为 table sheet：列即指标字段，values 置空（避免 S2 误判为聚合透视）
+  if (sheetType === 'table') {
+    fields.columns = fields.values;
+    fields.values = [];
+  }
+
+  const options: SheetComponentOptions = {
+    hierarchyType,
+    conditions: buildConditions(schema, records),
+    style: {
+      colCell: {
+        widthByField: Object.fromEntries(metricCols.map((c) => [c.metric as string, c.width])),
+      },
+      rowCell: {
+        widthByField: Object.fromEntries(dimCols.map((c) => [dimKey(c), c.width])),
+        treeWidth: dimCols.reduce((m, c) => Math.max(m, c.width ?? 0), 0) || undefined,
+      },
+    },
+  };
 
   return {
     dataCfg: { data: records as unknown as RawData[], fields, meta },
-    // hierarchyType 供层级展示使用；指标列默认右对齐，条件格式映射为 S2 conditions
-    options: {
-      hierarchyType: _hierarchyType,
-      conditions: buildConditions(schema, records),
-    },
+    // hierarchyType 供层级展示使用；指标列默认右对齐；条件格式映射为 S2 conditions；列宽据后端 width 填充
+    options,
     records,
     sheetType,
     dimMerges: buildDimMerges(schema, dimCols, bodyRows),
