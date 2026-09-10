@@ -16,6 +16,11 @@ describe('api client', () => {
     expect(ok).toBe(true);
   });
 
+  it('putDraft 携带 preview 键不被丢弃（mock 原样接受）', async () => {
+    const payload = JSON.stringify({ id: 'r', version: 2, preview: { hierarchy_type: 'tree' } });
+    await expect(putDraft('r', payload)).resolves.toBe(true);
+  });
+
   it('submits export and returns task id', async () => {
     const res = await submitExport({ def_id: 'rpt_sales' });
     expect(res.task_id).toBeTruthy();
