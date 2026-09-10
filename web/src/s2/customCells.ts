@@ -232,13 +232,4 @@ export class ReportColCell extends ColCell {
     }
     return baseStyle;
   }
-
-  // 合并单元格：__isMergeAnchor 为 true 才绘制文本，否则跳过（T8 由 PreviewSheet 注入该属性）
-  drawTextShape(): void {
-    const metaAny = this.meta as unknown as { __isMergeAnchor?: boolean };
-    if (metaAny.__isMergeAnchor !== undefined && !metaAny.__isMergeAnchor) {
-      return;
-    }
-    super.drawTextShape();
-  }
 }
