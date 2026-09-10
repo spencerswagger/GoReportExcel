@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PREVIEW, getPreview, setPreview, type PreviewCfg } from './hierarchy';
+import { DEFAULT_PREVIEW, getPreview, setPreview } from './hierarchy';
 
 describe('hierarchy preview config', () => {
   it('默认 grid', () => {
