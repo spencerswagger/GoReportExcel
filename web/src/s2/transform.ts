@@ -47,8 +47,9 @@ export function buildPreview(
       } else {
         rec.__dimCellIds[key] = cell.cell_id;
         // data-provided totals 语法：total 行省略全部维度键；subtotal 行省略空值维度键
+        // detail 行即使维度值为空也照常写入，避免 S2 依据"键缺失"误判行为小计
         const v = cell.value;
-        const omitDim = row.type === 'total' || (v === '' || v === null || v === undefined);
+        const omitDim = row.type !== 'detail' && (row.type === 'total' || v === '' || v === null || v === undefined);
         if (!omitDim) rec[key] = v;
       }
     }

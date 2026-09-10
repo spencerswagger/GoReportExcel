@@ -35,7 +35,7 @@ describe('buildPreview data model', () => {
 
   it('subtotal 记录省略空维度键（data-provided totals）', () => {
     const m = buildPreview(fixtureSchema, 'grid');
-    // records: idx2=上海detail(record0)... recordings: subtotal 上海=record2(idx4), 杭州=record5(idx7), 南京=record8(idx10), total=record9(idx11)
+    // records 顺序：上海/杭州/南京 subtotal 为 record2/5/8，total 为 record9
     const sh = m.records[2];
     expect(sh.__row.type).toBe('subtotal');
     expect(sh.amount).toBe(300);
@@ -52,5 +52,16 @@ describe('buildPreview data model', () => {
     expect('dim_0' in total).toBe(false);
     expect('dim_1' in total).toBe(false);
     expect(total.__cellIds.amount).toBe('r11c2');
+  });
+
+  it('detail 行维度值为空也照常写入维度键（保持 detail 语义）', () => {
+    const schema = structuredClone(fixtureSchema);
+    // 把第 2 行（物理 idx 2，上海 detail，record 0）的大区维度值置空
+    const row = schema.rows.find((r) => r.idx === 2)!;
+    row.cells = row.cells.map((c) => (c.col === 0 ? { ...c, value: '', display: '' } : c));
+    const m = buildPreview(schema, 'grid');
+    const rec = m.records[0];
+    expect('dim_0' in rec).toBe(true);
+    expect(rec.dim_0).toBe('');
   });
 });
