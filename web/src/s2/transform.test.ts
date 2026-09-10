@@ -68,6 +68,11 @@ describe('buildPreview data model', () => {
     expect(m2.headerStyles.amount).toBe('s1');
   });
 
+  it('styles 直通 schema.styles 字典', () => {
+    const m = buildPreview(fixtureSchema, 'grid');
+    expect(m.styles.s2.Fill).toBe('#F5F7FA');
+  });
+
   it('conditions.text: 指标列右对齐', () => {
     const m2 = buildPreview(fixtureSchema, 'grid');
     const text = m2.options.conditions?.text ?? [];

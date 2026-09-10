@@ -1,6 +1,7 @@
 import type { S2DataConfig, RawData } from '@antv/s2';
 import type { SheetComponentOptions } from '@antv/s2-react';
 import type { RenderSchema, RowDTO, ColInfo } from '../api/types';
+import type { ResolvedStyle } from '../api/types';
 import { colorScaleColor, topNHitIds } from '../editor/conditional';
 import type { PreviewHierarchyType } from './hierarchy';
 
@@ -130,6 +131,7 @@ export interface PreviewModel {
   sheetType: 'pivot' | 'table';
   dimMerges: DimMerge[];
   headerStyles: Record<string, string>;
+  styles: Record<string, ResolvedStyle>;
 }
 
 export function buildPreview(
@@ -200,10 +202,11 @@ export function buildPreview(
     conditions: buildConditions(schema, records),
     style: {
       colCell: {
-        widthByField: Object.fromEntries(metricCols.map((c) => [c.metric as string, c.width])),
+        widthByField: Object.fromEntries(metricCols.map((c) => [c.metric as string, c.width]).filter(([, w]) => w !== undefined)),
       },
       rowCell: {
-        widthByField: Object.fromEntries(dimCols.map((c) => [dimKey(c), c.width])),
+        widthByField: Object.fromEntries(dimCols.map((c) => [dimKey(c), c.width]).filter(([, w]) => w !== undefined)),
+        // 维度列最大宽（单位 px，语义为整列最大宽度）；仅 tree 模式生效（grid 模式各列独立撑开）
         treeWidth: dimCols.reduce((m, c) => Math.max(m, c.width ?? 0), 0) || undefined,
       },
     },
@@ -217,5 +220,6 @@ export function buildPreview(
     sheetType,
     dimMerges: buildDimMerges(schema, dimCols, bodyRows),
     headerStyles: buildHeaderStyles(schema),
+    styles: schema.styles,
   };
 }
