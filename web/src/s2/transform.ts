@@ -14,15 +14,66 @@ export interface PreviewRecord extends Record<string, unknown> {
 // hierarchyType 本任务暂不使用，T4 起用于层级展示，故保留在签名中
 const dimKey = (col: ColInfo): string => col.metric ?? `dim_${col.idx}`;
 
-export function buildPreview(
+// 维度合并：把 Excel 1-based 合并区间映射为 bodyRows 的 record 索引区间
+export interface DimMerge {
+  level: number;
+  from: number;
+  to: number;
+  anchorCellId: string;
+}
+
+function buildDimMerges(
   schema: RenderSchema,
-  _hierarchyType: PreviewHierarchyType = 'grid',
-): {
+  dimCols: ColInfo[],
+  bodyRows: RowDTO[],
+): DimMerge[] {
+  // record 索引 = bodyRows 内的位置（0-based），锚定到物理行 idx
+  const idxToRecord = new Map<number, number>();
+  bodyRows.forEach((r, i) => idxToRecord.set(r.idx, i));
+  // level 与维度列在 cols 中的顺序一致（0,1,...）
+  const levelByCol = new Map<number, number>();
+  dimCols.forEach((c, i) => levelByCol.set(c.idx, i));
+
+  const out: DimMerge[] = [];
+  for (const m of schema.merges ?? []) {
+    const colIdx0 = m.c - 1; // Excel 1-based → 0-based
+    const lvl = levelByCol.get(colIdx0);
+    if (lvl === undefined) continue; // 数据区合并本任务不处理（留给后续）
+    const from = idxToRecord.get(m.r1);
+    const to = idxToRecord.get(m.r2);
+    if (from === undefined || to === undefined || from > to) continue;
+    const anchor = bodyRows[from].cells.find((c) => c.col === colIdx0);
+    out.push({ level: lvl, from, to, anchorCellId: anchor?.cell_id ?? '' });
+  }
+  return out;
+}
+
+// 表头字段 → styleId 映射（dimKey 保证与数据键一致）
+function buildHeaderStyles(schema: RenderSchema): Record<string, string> {
+  const header = schema.rows.find((r) => r.type === 'header');
+  const map: Record<string, string> = {};
+  if (!header) return map;
+  for (const cell of header.cells) {
+    const col = schema.cols[cell.col];
+    if (!col) continue;
+    map[dimKey(col)] = cell.style;
+  }
+  return map;
+}
+
+export interface PreviewModel {
   dataCfg: S2DataConfig;
   options: SheetComponentOptions;
   records: PreviewRecord[];
   sheetType: 'pivot' | 'table';
-} {
+  dimMerges: DimMerge[];
+  headerStyles: Record<string, string>;
+}
+
+export function buildPreview(
+  schema: RenderSchema,
+  _hierarchyType: PreviewHierarchyType = 'grid',
+): PreviewModel {
   const dimCols = schema.cols.filter((c) => c.role === 'dimension');
   const metricCols = schema.cols.filter((c) => c.role === 'metric');
   const bodyRows = schema.rows.filter((r) => r.type !== 'header');
@@ -79,8 +130,16 @@ export function buildPreview(
 
   return {
     dataCfg: { data: records as unknown as RawData[], fields, meta },
-    options: {},
+    // hierarchyType 供层级展示使用；指标列默认右对齐
+    options: {
+      hierarchyType: _hierarchyType,
+      conditions: {
+        text: metricCols.map((c) => ({ field: c.metric as string, mapping: () => ({ textAlign: 'right' }) })),
+      },
+    },
     records,
     sheetType,
+    dimMerges: buildDimMerges(schema, dimCols, bodyRows),
+    headerStyles: buildHeaderStyles(schema),
   };
 }

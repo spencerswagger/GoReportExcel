@@ -54,6 +54,28 @@ describe('buildPreview data model', () => {
     expect(total.__cellIds.amount).toBe('r11c2');
   });
 
+  it('dim merges: 按物理行列映射到 record 索引区间', () => {
+    const m2 = buildPreview(fixtureSchema, 'grid');
+    const cityMerge = m2.dimMerges.find((x) => x.level === 1);
+    expect(cityMerge).toEqual({ level: 1, from: 0, to: 2, anchorCellId: 'r2c1' });
+    const regionMerge = m2.dimMerges.find((x) => x.level === 0);
+    expect(regionMerge).toEqual({ level: 0, from: 0, to: 5, anchorCellId: 'r2c0' });
+  });
+
+  it('header styles: 表头字段 → styleId 映射', () => {
+    const m2 = buildPreview(fixtureSchema, 'grid');
+    expect(m2.headerStyles.dim_0).toBe('s1');
+    expect(m2.headerStyles.amount).toBe('s1');
+  });
+
+  it('conditions.text: 指标列右对齐', () => {
+    const m2 = buildPreview(fixtureSchema, 'grid');
+    const text = m2.options.conditions?.text ?? [];
+    expect(text.length).toBe(2);
+    const amount = text.find((c) => (c as { field: unknown }).field === 'amount');
+    expect(amount).toBeTruthy();
+  });
+
   it('detail 行维度值为空也照常写入维度键（保持 detail 语义）', () => {
     const schema = structuredClone(fixtureSchema);
     // 把第 2 行（物理 idx 2，上海 detail，record 0）的大区维度值置空
