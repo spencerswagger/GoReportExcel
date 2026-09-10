@@ -147,6 +147,25 @@ describe('buildPreview data model', () => {
     expect(m.dimMerges.length).toBe(2);
   });
 
+  it('指标列 merge → mergedCellsInfo（数据区合并）', () => {
+    const schema = structuredClone(fixtureSchema);
+    // qty 列 = col idx 3（Excel 1-based c=4），合并 record 0..1 两行
+    schema.merges = [...(schema.merges ?? []), { r1: 2, r2: 3, c: 4 }];
+    const m = buildPreview(schema, 'grid');
+    expect(m.mergedCellsInfo.length).toBe(1);
+    // qty 在 values 中下标为 1（amount=0, qty=1），rowIndex = record 索引 0..1
+    expect(m.mergedCellsInfo[0]).toEqual([
+      { rowIndex: 0, colIndex: 1 },
+      { rowIndex: 1, colIndex: 1 },
+    ]);
+  });
+
+  it('无指标列合并时 mergedCellsInfo 为空数组', () => {
+    // 默认 fixture 仅含维度列合并（col idx 0/1），不落入指标列（col idx 2/3）
+    const m = buildPreview(fixtureSchema, 'grid');
+    expect(m.mergedCellsInfo).toEqual([]);
+  });
+
   it('top_n → conditions.background 命中集合', () => {
     const schema = structuredClone(fixtureSchema);
     schema.conditional_formats = [

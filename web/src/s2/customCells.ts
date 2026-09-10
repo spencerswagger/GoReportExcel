@@ -3,6 +3,7 @@ import type { ResolvedStyle } from '../api/types';
 import type { SpreadSheet, ViewMeta, RowHeaderConfig, ColHeaderConfig, Node } from '@antv/s2';
 import { Rect, Line } from '@antv/g';
 import type { Group } from '@antv/g';
+import type { PreviewModel } from './transform';
 
 // 线型 → 笔画（与旧 StyleSheet 线型语义一致）
 export interface LineSpec { color: string; width: number; dash?: number[] }
@@ -33,13 +34,28 @@ export function borderStrokes(st: ResolvedStyle) {
 export interface CellStyleLookup {
   styleOf(cellId: string): ResolvedStyle | undefined;
   indentOf(cellId: string): number;
+  // 行头节点 → 合并态：锚点 { anchor:true, anchorCellId }；覆盖行 { anchor:false, covered:true }；区间外 { anchor:false }
+  // covered 用于区分"合并区间内非锚点"（隐藏文本）与"区间外"（照常展示）
+  mergeOf(level: number, recordIndex: number): { anchor: boolean; anchorCellId?: string; covered?: boolean };
+  // 列头字段 → 表头样式 cell_id（headerStyles）
+  headerCellIdOf(field: string): string | undefined;
 }
 
-export function makeCellLookup(model: { styles: Record<string, ResolvedStyle> }): CellStyleLookup {
-  const { styles } = model;
+export function makeCellLookup(
+  model: Pick<PreviewModel, 'styles' | 'dimMerges' | 'headerStyles'>,
+): CellStyleLookup {
+  const { styles, dimMerges, headerStyles } = model;
   return {
     styleOf: (id) => (id ? styles[id] : undefined),
     indentOf: (id) => styles[id]?.Indent ?? 0,
+    mergeOf: (level, recordIndex) => {
+      // dimMerges 数量小，线性查找即可；level 对应 dimFields 下标
+      const m = dimMerges.find((d) => d.level === level && recordIndex >= d.from && recordIndex <= d.to);
+      if (!m) return { anchor: false }; // 区间外：正常展示
+      if (recordIndex === m.from) return { anchor: true, anchorCellId: m.anchorCellId }; // 锚点
+      return { anchor: false, covered: true }; // 覆盖行：隐藏文本
+    },
+    headerCellIdOf: (field) => headerStyles[field],
   };
 }
 
@@ -168,11 +184,15 @@ export class ReportRowCell extends RowCell {
     return baseIndent + customIndent * 10;
   }
 
-  // 合并单元格：__isMergeAnchor 为 true 才绘制文本，否则跳过（T8 由 PreviewSheet 注入该属性）
+  // 合并单元格：grid 模式维度列纵向合并，覆盖行（合并区间内非锚点）空白、锚点显示文本、区间外照常展示
+  // rowIndex 取 Node 的 rowIndex（若为 undefined 退化显示文本）
   drawTextShape(): void {
-    const metaAny = this.meta as unknown as { __isMergeAnchor?: boolean };
-    if (metaAny.__isMergeAnchor !== undefined && !metaAny.__isMergeAnchor) {
-      return;
+    const node = this.meta as unknown as { level?: number; rowIndex?: number };
+    if (node.level !== undefined && node.rowIndex !== undefined) {
+      const merge = getCellStyleLookup(this.spreadsheet)?.mergeOf(node.level, node.rowIndex);
+      if (merge?.covered) {
+        return; // 覆盖行：背景/边框仍绘制，仅隐藏文本
+      }
     }
     super.drawTextShape();
   }
@@ -184,18 +204,30 @@ export class ReportColCell extends ColCell {
     super(node, spreadsheet, headerConfig);
   }
 
+  // 取当前列头格样式：列头为 Node 元信息（无 __cellId 注入），按 node.field 从 headerStyles 反查 styleId，
+  // 再经 styleOf 得到 ResolvedStyle；找不到（如角头/未命中）返回 undefined 走基类默认主题。
+  protected headerStyle(): ResolvedStyle | undefined {
+    const lookup = getCellStyleLookup(this.spreadsheet);
+    const node = this.meta as unknown as { field?: string };
+    if (!lookup || node.field === undefined || node.field === '') return undefined;
+    const styleId = lookup.headerCellIdOf(node.field);
+    return styleId ? lookup.styleOf(styleId) : undefined;
+  }
+
   protected drawBackgroundShape(): void {
-    const cellId = cellIdOf(this.meta as unknown as { __cellId?: string });
-    const style = cellId ? getCellStyleLookup(this.spreadsheet)?.styleOf(cellId) : undefined;
-    drawStyledBackground(this, () => super.drawBackgroundShape(), () => this.getBBoxByType(), style);
+    const style = this.headerStyle();
+    if (style) {
+      // 列头逐格样式：底色（fill）与四边线型边框复用 drawStyledBackground（与数据格/行头同款 Rect+Line 方案）
+      drawStyledBackground(this, () => super.drawBackgroundShape(), () => this.getBBoxByType(), style);
+      return;
+    }
+    super.drawBackgroundShape();
   }
 
   // 字重：继承 Bold 属性
   protected getTextStyle() {
     const baseStyle = super.getTextStyle();
-    const cellId = cellIdOf(this.meta as unknown as { __cellId?: string });
-    const style = cellId ? getCellStyleLookup(this.spreadsheet)?.styleOf(cellId) : undefined;
-    if (style?.Bold) {
+    if (this.headerStyle()?.Bold) {
       return { ...baseStyle, fontWeight: 'bold' as const };
     }
     return baseStyle;

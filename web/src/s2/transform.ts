@@ -1,4 +1,4 @@
-import type { S2DataConfig, RawData } from '@antv/s2';
+import type { S2DataConfig, RawData, MergedCellInfo } from '@antv/s2';
 import type { SheetComponentOptions } from '@antv/s2-react';
 import type { RenderSchema, RowDTO, ColInfo } from '../api/types';
 import type { ResolvedStyle } from '../api/types';
@@ -66,6 +66,37 @@ function buildHeaderStyles(schema: RenderSchema): Record<string, string> {
   return map;
 }
 
+// 指标列的数据区合并 → S2 mergedCellsInfo（MergedCellInfo[][]，每组为矩形内所有格子）
+// 仅处理 m.c-1 落在指标列 idx 集合中的 merge；colIndex = 该指标列在 values 中的下标，rowIndex = record 索引
+function buildMergedCellsInfo(
+  schema: RenderSchema,
+  metricCols: ColInfo[],
+  bodyRows: RowDTO[],
+): MergedCellInfo[][] {
+  if (metricCols.length === 0) return [];
+  const idxToRecord = new Map<number, number>();
+  bodyRows.forEach((r, i) => idxToRecord.set(r.idx, i));
+  // 指标列 → values 下标（保持原序）
+  const valueIndexByCol = new Map<number, number>();
+  metricCols.forEach((c, i) => valueIndexByCol.set(c.idx, i));
+
+  const out: MergedCellInfo[][] = [];
+  for (const m of schema.merges ?? []) {
+    const colIdx0 = m.c - 1; // Excel 1-based → 0-based
+    const vi = valueIndexByCol.get(colIdx0);
+    if (vi === undefined) continue; // 维度列合并/未知列不在本函数范围（由 dimMerges 处理）
+    const from = idxToRecord.get(m.r1);
+    const to = idxToRecord.get(m.r2);
+    if (from === undefined || to === undefined || from > to) continue;
+    const group: MergedCellInfo[] = [];
+    for (let row = from; row <= to; row++) {
+      group.push({ rowIndex: row, colIndex: vi });
+    }
+    out.push(group);
+  }
+  return out;
+}
+
 // 将后端条件格式 CFInfo 映射为 S2 conditions（text 右对齐 + interval 数据条 + background 色阶/前 N）
 // 注意：S2 conditions 为字段级，无法表达子集范围；cf.ranges 的子集范围语义降级为整列套用（与旧画布一致处仅限整列范围）
 function buildConditions(
@@ -131,6 +162,7 @@ export interface PreviewModel {
   sheetType: 'pivot' | 'table';
   dimMerges: DimMerge[];
   headerStyles: Record<string, string>;
+  mergedCellsInfo: MergedCellInfo[][];
   styles: Record<string, ResolvedStyle>;
 }
 
@@ -234,6 +266,7 @@ export function buildPreview(
     sheetType,
     dimMerges: buildDimMerges(schema, dimCols, bodyRows),
     headerStyles: buildHeaderStyles(schema),
+    mergedCellsInfo: buildMergedCellsInfo(schema, metricCols, bodyRows),
     styles: schema.styles,
   };
 }

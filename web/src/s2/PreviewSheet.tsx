@@ -50,6 +50,8 @@ export default function PreviewSheet({ schema, hierarchyType = 'grid', zoom = 1,
   // 导致逐格样式（填充/边框/缩进/加粗）首屏缺位。工厂在 cell 构造期间执行，先绑定后构造可保证首帧命中。
   const options = useMemo<SheetComponentOptions>(() => ({
     ...model.options,
+    // 数据区合并：无合并时不传（undefined）以免干扰 S2 默认交互
+    mergedCellsInfo: model.mergedCellsInfo.length > 0 ? model.mergedCellsInfo : undefined,
     dataCell: (viewMeta, s2) => {
       setCellStyleLookup(s2, lookup);
       return new ReportDataCell(viewMeta, s2);
