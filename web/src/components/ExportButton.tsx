@@ -18,7 +18,12 @@ export function ExportButton({ defId }: { defId: string }) {
     }
   };
 
-  useEffect(() => () => { cancelledRef.current = true; stopPoll(); }, []);
+  useEffect(() => {
+    // StrictMode 下组件会挂载两次：首次挂载的 cleanup 会把 cancelledRef 置为 true，
+    // 这里在挂载时重置，确保第二次挂载后导出流程能正常进行。
+    cancelledRef.current = false;
+    return () => { cancelledRef.current = true; stopPoll(); };
+  }, []);
 
   const busy = progress != null && state !== 'done' && state !== 'failed';
 
