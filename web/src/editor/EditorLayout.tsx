@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Button, Dropdown, MenuProps, Spin } from 'antd';
+import { Alert, Button, Dropdown, MenuProps, Segmented, Spin } from 'antd';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError, getDraft, getPublished, publish, renderPreview } from '../api/client';
 import { useEditorStore } from '../store/editor';
@@ -12,7 +12,8 @@ import { RuleBuilder } from '../panels/RuleBuilder';
 import { ConditionalFormatsPanel } from '../panels/ConditionalFormatsPanel';
 import { PageSetupPanel } from '../panels/PageSetupPanel';
 import { Inspector } from '../panels/Inspector';
-import PreviewCanvas from './PreviewCanvas';
+import PreviewSheet from '../s2/PreviewSheet';
+import { getPreview, setPreview, PREVIEW_HIERARCHY_TYPES, type PreviewHierarchyType } from '../s2/hierarchy';
 import { applyTheme, listThemes } from '../themes';
 
 function SaveChip({ state }: { state: string }) {
@@ -118,6 +119,9 @@ export default function EditorLayout() {
     onClick: () => applyThemeDraft(t.id),
   }));
 
+  // 读取草稿中的预览形态配置（默认 grid），供 Segmented 与 PreviewSheet 使用
+  const previewCfg = getPreview(draft as unknown as Record<string, unknown> | null);
+
   const doPublish = async () => {
     setPublishError(false);
     setPublished(false);
@@ -194,6 +198,18 @@ export default function EditorLayout() {
         <section className="ate-canvas-zone" aria-label="预览画布">
           <div className="ate-canvas-bar">
             <span style={{ letterSpacing: '.06em' }}>实时预览</span>
+            <Segmented
+              size="small"
+              options={PREVIEW_HIERARCHY_TYPES.map((t) => ({ label: t, value: t }))}
+              value={previewCfg.hierarchy_type}
+              onChange={(v) => {
+                const next = v as PreviewHierarchyType;
+                if (next === previewCfg.hierarchy_type) return;
+                const s = useEditorStore.getState();
+                s.checkpoint(`切换预览形态 ${next}`);
+                s.mutateDraft((d) => { setPreview(d as unknown as Record<string, unknown>, { hierarchy_type: next }); });
+              }}
+            />
             <span className="mono" style={{ color: 'var(--ink-faint)' }}>
               {rowTotal} ROWS · {render ? `${render.cols.length} COLS` : '—'}
             </span>
@@ -210,7 +226,13 @@ export default function EditorLayout() {
           <div className="ate-canvas-sheet">
             <div className="ate-sheet-frame">
               {render ? (
-                <PreviewCanvas schema={render} selectedCell={selectedCell} onSelect={selectCell} zoom={zoom} />
+                <PreviewSheet
+                  schema={render}
+                  hierarchyType={previewCfg.hierarchy_type}
+                  selectedCell={selectedCell}
+                  onSelect={selectCell}
+                  zoom={zoom}
+                />
               ) : (
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-faint)', fontFamily: "'Noto Serif SC', serif", fontSize: 15 }}>
                   暂无预览
