@@ -224,10 +224,15 @@ const storeData = loadStore();
 const dbSources: DataSourceInfo[] = storeData ? storeData.sources : [...seedSources];
 const dbDatasets: Array<DatasetInfo & { table?: string; sample_rows?: Array<Record<string, unknown>> }> =
   storeData ? storeData.datasets : seedDatasetsStored;
-for (const [sid, tables] of Object.entries(storeData?.tables ?? initTables())) {
-  csvTables.set(sid, new Map(Object.entries(tables)));
+if (storeData) {
+  for (const [sid, tables] of Object.entries(storeData.tables)) {
+    csvTables.set(sid, new Map(Object.entries(tables)));
+  }
+} else {
+  // 首次访问（无持久化）：直接把种子的 orders.csv 表挂到表仓库，保证种子数据集可预览
+  csvTables.set('csv_local', new Map([['orders.csv', seedOrders]]));
+  saveStore();
 }
-if (!storeData) saveStore();
 
 export const mockDataSources: DataSourceInfo[] = [...dbSources];
 
@@ -335,10 +340,23 @@ function buildFromRealRows(payload: Partial<typeof defaultDraftPayload>, parsed:
   let total = metrics.map(() => 0);
   let rowCountForCF = 0;
 
+  // 小计/总计必须基于全量行聚合（真实汇总），明细行才受预览窗口限制
+  const groupTotals = new Map<string, number[]>();
+  for (const r of parsed.rows) {
+    const k = groupKey(r);
+    const arr = groupTotals.get(k) ?? metrics.map(() => 0);
+    metrics.forEach((m, i) => {
+      const v = Number(r[m.field] ?? 0) || 0;
+      arr[i] += v;
+      total[i] += v;
+    });
+    groupTotals.set(k, arr);
+  }
+
   for (const k of showKeys) {
     const group = groups.get(k)!;
     const combo = k.split('\u0001');
-    const gt = metrics.map(() => 0);
+    const gt = groupTotals.get(k) ?? metrics.map(() => 0);
     let seqInGroup = 0;
     for (const r of group.slice(0, 4)) {
       seqInGroup += 1;
@@ -350,7 +368,6 @@ function buildFromRealRows(payload: Partial<typeof defaultDraftPayload>, parsed:
           return { col: c.idx, cell_id: `r${rIdx}c${c.idx}`, value: v, display: v, style: 's1' === c.label ? 's1' : 's2' };
         }
         const v = Number(r[c.metric ?? '']) || 0;
-        gt[metrics.findIndex((m) => m.field === c.metric)] += v;
         return { col: c.idx, cell_id: `r${rIdx}c${c.idx}`, value: v, display: String(v), style: 's2' };
       });
       rows.push({ idx: rIdx, type: 'detail' as const, group_path: combo, seq: seqInGroup, cells });
@@ -367,7 +384,6 @@ function buildFromRealRows(payload: Partial<typeof defaultDraftPayload>, parsed:
       return { col: c.idx, cell_id: `r${rIdx}c${c.idx}`, value: v, display: String(v), style: 's3' };
     });
     rows.push({ idx: rIdx, type: 'subtotal' as const, group_path: combo, cells });
-    gt.forEach((v, i) => { total[i] += v; });
   }
 
   const rIdx = idx++;
