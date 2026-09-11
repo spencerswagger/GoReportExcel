@@ -56,8 +56,9 @@ test('editing dimension label mutates draft via store', () => {
 
 test('MetricsPanel shows agg type', () => {
   render(<MetricsPanel />);
-  expect(screen.getByText('销售额')).toBeTruthy();
-  expect(screen.getByText('SUM')).toBeTruthy();
+  expect(screen.getByDisplayValue('销售额')).toBeTruthy();
+  // 聚合方式为可编辑的下拉，展示选项文案「求和 SUM」
+  expect(screen.getByText('求和 SUM')).toBeTruthy();
 });
 
 test('undo restores dimension label after edit', () => {
@@ -188,21 +189,23 @@ test('DimensionsPanel adds dimension from dataset field pool and removes it', ()
   expect(dims.map((d) => d.field)).not.toContain('channel');
 });
 
-test('MetricsPanel adds metric from field pool, removes and reorders it', () => {
+test('MetricsPanel adds metric from numeric pool, removes and reorders it', () => {
   const s = useEditorStore.getState();
   s.setDraft(draftWithChannel(), 2);
   render(<MetricsPanel />);
-  // 添加 channel 指标
+  // 字符串字段不作为指标候选：字段池仅数值列（channel 是 string）
+  expect(screen.queryByText('channel · string')).toBeNull();
+  // 添加数值字段 qty 为第二个指标
   fireEvent.click(screen.getByRole('button', { name: /添加指标/ }));
-  fireEvent.click(screen.getByText('channel · string'));
+  fireEvent.click(screen.getByText('qty · number'));
   let metrics = (useEditorStore.getState().draft as DraftShape).metrics as MetricDef[];
-  expect(metrics.map((m) => m.field)).toEqual(['amount', 'channel']);
-  // 上移 channel → 与 amount 换位
-  fireEvent.click(screen.getByLabelText('上移 channel'));
+  expect(metrics.map((m) => m.field)).toEqual(['amount', 'qty']);
+  // 上移 qty → 与 amount 换位
+  fireEvent.click(screen.getByLabelText('上移 qty'));
   metrics = (useEditorStore.getState().draft as DraftShape).metrics as MetricDef[];
-  expect(metrics.map((m) => m.field)).toEqual(['channel', 'amount']);
-  // 删除 channel
-  fireEvent.click(screen.getByLabelText('删除指标 channel'));
+  expect(metrics.map((m) => m.field)).toEqual(['qty', 'amount']);
+  // 删除 qty
+  fireEvent.click(screen.getByLabelText('删除指标 qty'));
   metrics = (useEditorStore.getState().draft as DraftShape).metrics as MetricDef[];
-  expect(metrics.map((m) => m.field)).not.toContain('channel');
+  expect(metrics.map((m) => m.field)).not.toContain('qty');
 });

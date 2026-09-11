@@ -250,25 +250,46 @@ function buildMockSchema(payload: Partial<typeof defaultDraftPayload>): RenderSc
   return buildFromRealRows(payload, parsed);
 }
 
-/** 真实 CSV 行 → 分组报表：detail 明细直出 + 按组小计 + 总计（指标按 SUM 聚合） */
+/** 指标聚合方式：SUM/AVG/MIN/MAX/COUNT（缺省 SUM） */
+function aggValue(agg: string, values: number[]): number {
+  if (values.length === 0) return 0;
+  switch (agg.toUpperCase()) {
+    case 'AVG': return Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 100) / 100;
+    case 'MIN': return Math.min(...values);
+    case 'MAX': return Math.max(...values);
+    case 'COUNT': return values.length;
+    default: return values.reduce((a, b) => a + b, 0); // SUM
+  }
+}
+
+/** 真实 CSV 行 → 分组报表：detail 明细直出 + 按行维度小计 + 总计（指标按各自聚合方式汇总；列维度透视为列头） */
 function buildFromRealRows(payload: Partial<typeof defaultDraftPayload>, parsed: ParsedTable): RenderSchema {
-  const dims = payload.dimensions ?? [];
+  // 草稿维度可能来自用户编辑（含 axis），defaultDraftPayload 推导类型不含该字段，这里放宽类型
+  type DimensionLike = { field: string; label?: string; axis?: 'row' | 'col'; sort?: { by: string; dir: string } };
+  const dimsInput = (payload.dimensions ?? []) as DimensionLike[];
+  const rowDims = dimsInput.filter((d) => (d.axis ?? 'row') === 'row');
+  const colDims = dimsInput.filter((d) => (d.axis ?? 'row') === 'col');
   const metrics = payload.metrics ?? [];
   const labelOf = (f: string) => parsed.fields.find((x) => x.key === f)?.label ?? f;
+  // 表头显示名：优先使用用户在编辑器配置的显示名（指标名/维度名），缺省回退字段 label
+  const dimLabel = (d: { field: string; label?: string }) => (d.label?.trim() ? d.label : labelOf(d.field));
+  const metricLabel = (m: { field: string; label?: string }) => (m.label?.trim() ? m.label : labelOf(m.field));
 
   const meta: RenderSchema['cols'] = [
-    ...dims.map((d, i) => ({
-      idx: i, role: 'dimension' as const, label: labelOf(d.field),
+    ...rowDims.map((d, i) => ({
+      idx: i, role: 'dimension' as const, axis: 'row' as const, label: dimLabel(d),
       width: 96, align: 'left' as const,
     })),
     ...metrics.map((m, i) => ({
-      idx: dims.length + i, role: 'metric' as const, label: labelOf(m.field),
+      idx: rowDims.length + i, role: 'metric' as const, label: metricLabel(m),
       width: 120, align: 'right' as const, num_fmt: m.num_fmt_ref === 'money' ? '#,##0.00' : '#,##0', metric: m.field,
     })),
   ];
+  const colDimMeta: RenderSchema['col_dims'] = colDims.map((d) => ({ field: d.field, label: dimLabel(d) }));
+  const hasColDims = colDims.length > 0;
 
-  // 按全维度组合键分组（保序）
-  const groupKey = (r: Record<string, unknown>) => dims.map((d) => String(r[d.field] ?? '')).join('\u0001');
+  // 分组仅按行维度组合键（保序）；列维度值由 detail 行原样携带，S2 负责透视列头
+  const groupKey = (r: Record<string, unknown>) => rowDims.map((d) => String(r[d.field] ?? '')).join('\u0001');
   const groups = new Map<string, Array<Record<string, unknown>>>();
   const order: string[] = [];
   for (const r of parsed.rows) {
@@ -278,30 +299,36 @@ function buildFromRealRows(payload: Partial<typeof defaultDraftPayload>, parsed:
   }
   const showKeys = order.slice(0, 8);
 
+  // 分类收集每个指标（每行维度组合 / 全量）的数值，按 agg 汇总为小计/总计
+  const rawMetric = (r: Record<string, unknown>, field: string): number | null => {
+    const n = Number(r[field]);
+    return Number.isNaN(n) ? null : n;
+  };
+  const groupValues = new Map<string, number[][]>();
+  const totalValues = metrics.map(() => [] as number[]);
+  for (const r of parsed.rows) {
+    const k = rowDims.length ? groupKey(r) : '__all__';
+    if (!groupValues.has(k)) groupValues.set(k, metrics.map(() => [] as number[]));
+    const gvs = groupValues.get(k)!;
+    metrics.forEach((m, i) => {
+      const n = rawMetric(r, m.field);
+      if (n !== null) { gvs[i].push(n); totalValues[i].push(n); }
+    });
+  }
+
   let idx = 1;
   const rows: RowDTO[] = [
     { idx: idx++, type: 'header', cells: meta.map((c) => ({ col: c.idx, cell_id: `r1c${c.idx}`, value: c.label, display: c.label, style: 's1' })) },
   ];
-  let total = metrics.map(() => 0);
-  let rowCountForCF = 0;
 
-  // 小计/总计必须基于全量行聚合（真实汇总），明细行才受预览窗口限制
-  const groupTotals = new Map<string, number[]>();
-  for (const r of parsed.rows) {
-    const k = groupKey(r);
-    const arr = groupTotals.get(k) ?? metrics.map(() => 0);
-    metrics.forEach((m, i) => {
-      const v = Number(r[m.field] ?? 0) || 0;
-      arr[i] += v;
-      total[i] += v;
-    });
-    groupTotals.set(k, arr);
-  }
+  // 条件格式的数据条以真实指标最大值为上界
+  let rowCountForCF = 0;
+  const cfMax = metrics.reduce((acc, m) => Math.max(acc,
+    parsed.rows.reduce((a, r) => Math.max(a, rawMetric(r, m.field) ?? 0), 0)), 1);
 
   for (const k of showKeys) {
     const group = groups.get(k)!;
     const combo = k.split('\u0001');
-    const gt = groupTotals.get(k) ?? metrics.map(() => 0);
     let seqInGroup = 0;
     for (const r of group.slice(0, 4)) {
       seqInGroup += 1;
@@ -309,47 +336,56 @@ function buildFromRealRows(payload: Partial<typeof defaultDraftPayload>, parsed:
       const rIdx = idx++;
       const cells = meta.map((c) => {
         if (c.role === 'dimension') {
-          const v = String(r[dims[c.idx].field] ?? '');
-          return { col: c.idx, cell_id: `r${rIdx}c${c.idx}`, value: v, display: v, style: 's1' === c.label ? 's1' : 's2' };
+          const v = String(r[rowDims[c.idx].field] ?? '');
+          return { col: c.idx, cell_id: `r${rIdx}c${c.idx}`, value: v, display: v, style: 's2' };
         }
-        const v = Number(r[c.metric ?? '']) || 0;
+        const v = rawMetric(r, c.metric ?? '') ?? 0;
         return { col: c.idx, cell_id: `r${rIdx}c${c.idx}`, value: v, display: String(v), style: 's2' };
       });
-      rows.push({ idx: rIdx, type: 'detail' as const, group_path: combo, seq: seqInGroup, cells });
+      const detail: RowDTO = { idx: rIdx, type: 'detail' as const, group_path: combo, seq: seqInGroup, cells };
+      if (hasColDims) {
+        detail.col_dim_values = {};
+        for (const cd of colDims) detail.col_dim_values[cd.field] = String(r[cd.field] ?? '');
+      }
+      rows.push(detail);
     }
+    // 小计：手动输出仅用于无列维度场景（列维度下由 S2 透视自动小计）
+    if (!hasColDims) {
+      const rIdx = idx++;
+      rowCountForCF += 1;
+      const gvs = groupValues.get(k) ?? [];
+      const cells = meta.map((c) => {
+        if (c.role === 'dimension') {
+          const v = c.idx === rowDims.length - 1 ? String(combo[c.idx] ?? '') : '';
+          return { col: c.idx, cell_id: `r${rIdx}c${c.idx}`, value: v, display: v, style: 's3' };
+        }
+        const vi = metrics.findIndex((m) => m.field === c.metric);
+        const v = aggValue(metrics[vi]?.agg ?? 'SUM', gvs[vi] ?? []);
+        return { col: c.idx, cell_id: `r${rIdx}c${c.idx}`, value: v, display: String(v), style: 's3' };
+      });
+      rows.push({ idx: rIdx, type: 'subtotal' as const, group_path: combo, cells });
+    }
+  }
+
+  if (!hasColDims) {
     const rIdx = idx++;
-    rowCountForCF += 1;
-    const cells = meta.map((c) => {
+    const totalCells = meta.map((c) => {
       if (c.role === 'dimension') {
-        const v = c.idx === dims.length - 1 ? String(combo[c.idx] ?? '') : '';
+        const v = c.idx === 0 ? '总计' : '';
         return { col: c.idx, cell_id: `r${rIdx}c${c.idx}`, value: v, display: v, style: 's3' };
       }
       const vi = metrics.findIndex((m) => m.field === c.metric);
-      const v = gt[vi];
+      const v = aggValue(metrics[vi]?.agg ?? 'SUM', totalValues[vi] ?? []);
       return { col: c.idx, cell_id: `r${rIdx}c${c.idx}`, value: v, display: String(v), style: 's3' };
     });
-    rows.push({ idx: rIdx, type: 'subtotal' as const, group_path: combo, cells });
+    rows.push({ idx: rIdx, type: 'total' as const, cells: totalCells });
   }
-
-  const rIdx = idx++;
-  const totalCells = meta.map((c) => {
-    if (c.role === 'dimension') {
-      const v = c.idx === 0 ? '总计' : '';
-      return { col: c.idx, cell_id: `r${rIdx}c${c.idx}`, value: v, display: v, style: 's3' };
-    }
-    const v = total[metrics.findIndex((m) => m.field === c.metric)] ?? 0;
-    return { col: c.idx, cell_id: `r${rIdx}c${c.idx}`, value: v, display: String(v), style: 's3' };
-  });
-  rows.push({ idx: rIdx, type: 'total' as const, cells: totalCells });
-
-  // 条件格式的数据条以真实指标最大值为上界
-  const cfMax = metrics.reduce((acc, m) => Math.max(acc,
-    parsed.rows.reduce((a, r) => Math.max(a, Number(r[m.field]) || 0), 0)), 1);
 
   return {
     schema_version: 1,
     report: { id: payload.id ?? 'rpt_sales', def_version: payload.version ?? 2, row_total: rows.length },
     cols: meta,
+    col_dims: hasColDims ? colDimMeta : undefined,
     styles: SCHEMA_STYLES,
     merges: [],
     rows,
@@ -548,4 +584,33 @@ export const handlers = [
   http.get('*/v1/export/:taskId', () =>
     HttpResponse.json({ id: 'task-1', state: 'done', progress: 1, updated_at: '2026-09-05T00:00:01Z' }),
   ),
+
+  http.get('*/v1/export/:taskId/download', ({ request }) => {
+    // 导出下载：按草稿缓存的配置动态生成 CSV 文件流（真实行聚合），不再返回 SPA 页面
+    const defId = new URL(request.url).searchParams.get('def_id') ?? 'rpt_sales';
+    const payload = draftCache.get(defId) ?? draftFor(defId);
+    const schema = buildMockSchema(payload);
+    const csv = csvFromSchema(schema);
+    const reportName = (payload.name ?? 'report').replace(/[\\/"]/g, '_').trim() || 'report';
+    // Header 值必须 ASCII 合法：filename 用安全化名称，中文名经 filename*=UTF-8 传给现代浏览器
+    const asciiName = reportName.replace(/[^\x20-\x7E]/g, '_');
+    const disposition = `attachment; filename="${asciiName}.csv"; filename*=UTF-8''${encodeURIComponent(`${reportName}.csv`)}`;
+    return new HttpResponse(csv, {
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': disposition,
+      },
+    });
+  }),
 ];
+
+/** schema → UTF-8 CSV（RFC 4180，带 BOM 便于 Excel 识别中文） */
+function csvFromSchema(schema: RenderSchema): string {
+  const esc = (v: string) => (/[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+  const lines = [schema.cols.map((c) => esc(c.label)).join(',')];
+  for (const r of schema.rows) {
+    if (r.type !== 'detail') continue;
+    lines.push(r.cells.map((c) => esc(c.display)).join(','));
+  }
+  return `\uFEFF${lines.join('\r\n')}`;
+}

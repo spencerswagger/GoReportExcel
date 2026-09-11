@@ -170,11 +170,14 @@ export function buildPreview(
   schema: RenderSchema,
   hierarchyType: PreviewHierarchyType = 'grid',
 ): PreviewModel {
-  const dimCols = schema.cols.filter((c) => c.role === 'dimension');
+  // 行维度：cols 中 role=dimension 的列（后端已把列维度从 cols 移除，仅保留在 schema.col_dims）
+  const rowCols = schema.cols.filter((c) => c.role === 'dimension');
   const metricCols = schema.cols.filter((c) => c.role === 'metric');
+  const colsDimKeys = (schema.col_dims ?? []).map((c) => c.field);
   const bodyRows = schema.rows.filter((r) => r.type !== 'header');
 
   // 维度键：有 metric 用 metric，否则用 dim_<列序号>（fixture 维度列无 metric → dim_0/dim_1）
+  const rowDimKeys = rowCols.map(dimKey);
 
   const records: PreviewRecord[] = bodyRows.map((row) => {
     const rec: PreviewRecord = {
@@ -200,17 +203,24 @@ export function buildPreview(
         if (!omitDim) rec[key] = v;
       }
     }
+    // 列维度值：detail 行透传原值，S2 按 columns 字段透视出列头
+    if (row.col_dim_values) {
+      for (const [f, v] of Object.entries(row.col_dim_values)) {
+        if (v === '' || v === null || v === undefined) continue;
+        rec[f] = v;
+      }
+    }
     return rec;
   });
 
   const fields = {
-    rows: dimCols.map(dimKey),
-    columns: [] as string[],
+    rows: rowDimKeys,
+    columns: colsDimKeys as string[],
     values: metricCols.map((c) => c.metric as string),
   };
 
   const meta = [
-    ...dimCols.map((c) => ({ field: dimKey(c), name: c.label })),
+    ...rowCols.map((c) => ({ field: dimKey(c), name: c.label })),
     ...metricCols.map((c) => ({
       field: c.metric as string,
       name: c.label,
@@ -222,8 +232,8 @@ export function buildPreview(
     })),
   ];
 
-  const sheetType: 'pivot' | 'table' = fields.rows.length === 0 ? 'table' : 'pivot';
-  // 0 维度报表回退为 table sheet：列即指标字段，values 置空（避免 S2 误判为聚合透视）
+  // 透视：行/列维度至少有一方时才用 pivot；两者皆空回退为 table sheet（列即指标字段）
+  const sheetType: 'pivot' | 'table' = fields.rows.length === 0 && fields.columns.length === 0 ? 'table' : 'pivot';
   if (sheetType === 'table') {
     fields.columns = fields.values;
     fields.values = [];
@@ -231,7 +241,7 @@ export function buildPreview(
 
   // data-provided totals 需开启 options.totals 才展示：小计/总计以省略维度键的 records 提供（优先），
   // 未提供记录的层级（fixture 简化数据）由 S2 按 calcXxx 补算
-  const dimFields = dimCols.map(dimKey);
+  const dimFields = rowCols.map(dimKey);
   const options: SheetComponentOptions = {
     hierarchyType,
     totals: {
@@ -251,9 +261,9 @@ export function buildPreview(
         widthByField: Object.fromEntries(metricCols.map((c) => [c.metric as string, c.width]).filter(([, w]) => w !== undefined)),
       },
       rowCell: {
-        widthByField: Object.fromEntries(dimCols.map((c) => [dimKey(c), c.width]).filter(([, w]) => w !== undefined)),
+        widthByField: Object.fromEntries(rowCols.map((c) => [dimKey(c), c.width]).filter(([, w]) => w !== undefined)),
         // 维度列最大宽（单位 px，语义为整列最大宽度）；仅 tree 模式生效（grid 模式各列独立撑开）
-        treeWidth: dimCols.reduce((m, c) => Math.max(m, c.width ?? 0), 0) || undefined,
+        treeWidth: rowCols.reduce((m, c) => Math.max(m, c.width ?? 0), 0) || undefined,
       },
     },
   };
@@ -264,7 +274,7 @@ export function buildPreview(
     options,
     records,
     sheetType,
-    dimMerges: buildDimMerges(schema, dimCols, bodyRows),
+    dimMerges: buildDimMerges(schema, rowCols, bodyRows),
     headerStyles: buildHeaderStyles(schema),
     mergedCellsInfo: buildMergedCellsInfo(schema, metricCols, bodyRows),
     styles: schema.styles,

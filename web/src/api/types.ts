@@ -1,6 +1,8 @@
 export interface ColInfo {
   idx: number;
   role: 'dimension' | 'metric';
+  /** 维度列的轴：row（行）或 col（列，透视列头）。缺省视为 row。 */
+  axis?: 'row' | 'col';
   label: string;
   width: number;
   align: 'left' | 'right';
@@ -38,6 +40,8 @@ export interface RowDTO {
   seq?: number;
   height?: number;
   cells: CellDTO[];
+  /** detail 行的列维度值：col_dim 字段 → 该行原始记录在此列的取值（S2 透视列头用） */
+  col_dim_values?: Record<string, string>;
 }
 
 export interface CFStats { min: number; max: number }
@@ -58,10 +62,17 @@ export interface PageSetupInfo {
   repeat_header_rows?: number;
 }
 
+export interface ColDimensionInfo {
+  field: string;
+  label: string;
+}
+
 export interface RenderSchema {
   schema_version: number;
   report: { id: string; def_version: number; row_total: number };
   cols: ColInfo[];
+  /** 列维度（透视为列头）字段列表；缺省表示全部维度在行向 */
+  col_dims?: ColDimensionInfo[];
   styles: Record<string, ResolvedStyle>;
   merges: MergeInfo[];
   rows: RowDTO[];

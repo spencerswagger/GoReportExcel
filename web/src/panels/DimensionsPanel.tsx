@@ -40,24 +40,39 @@ function SortableItem({ dim, index }: { dim: DimensionDef; index: number }) {
     });
   }, [checkpoint, mutateDraft, dim.field]);
 
+  const axis = dim.axis ?? 'row';
+
   return (
-    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, display: 'flex', gap: 6, marginBottom: 8, alignItems: 'center' }}>
-      <span {...attributes} {...listeners} style={{ cursor: 'grab', display: 'inline-flex', flexShrink: 0 }}>
-        <Typography.Text type="secondary">≣</Typography.Text>
-      </span>
-      <Input style={{ width: 96 }} defaultValue={dim.label} onBlur={(e) => {
-        if (e.target.value !== dim.label) update({ label: e.target.value });
-      }} />
-      <Select style={{ width: 78 }} value={dim.sort?.by ?? 'sort_key'} onChange={(v) => update({ sort: { by: v, dir: dim.sort?.dir ?? 'asc' } })} options={[
-        { value: 'sort_key', label: 'sort_key' },
-        { value: 'value', label: '值' },
-      ]} />
-      <Switch checked={dim.sort?.dir === 'desc'} checkedChildren="降" unCheckedChildren="升"
-        onChange={(v) => update({ sort: { by: dim.sort?.by ?? 'sort_key', dir: v ? 'desc' : 'asc' } })} />
-      <Tooltip title="删除维度">
-        <Button type="text" size="small" aria-label={`删除维度 ${dim.label}`} style={{ color: 'var(--ink-faint)' }}
-          onClick={remove}>×</Button>
-      </Tooltip>
+    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, marginBottom: 8, borderRadius: 'var(--radius-s)', border: '1px solid var(--paper-line)', padding: '6px 8px' }}>
+      {/* 第一行：字段名 + 行/列轴 + 删除 */}
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
+        <span {...attributes} {...listeners} style={{ cursor: 'grab', display: 'inline-flex', flexShrink: 0 }}>
+          <Typography.Text type="secondary">≣</Typography.Text>
+        </span>
+        <span className="mono" data-testid={`dim-field-${dim.field}`} style={{ fontSize: 11, color: 'var(--ink-faint)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {dim.field}
+        </span>
+        <Select size="small" aria-label={`轴 ${dim.field}`} value={axis} style={{ width: 62 }} options={[
+          { value: 'row', label: '行' },
+          { value: 'col', label: '列' },
+        ]} onChange={(v) => update({ axis: v })} />
+        <Tooltip title="删除维度">
+          <Button type="text" size="small" aria-label={`删除维度 ${dim.field}`} style={{ color: 'var(--ink-faint)' }}
+            onClick={remove}>×</Button>
+        </Tooltip>
+      </div>
+      {/* 第二行：显示名 + 排序依据 + 升降序 */}
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <Input size="small" key={dim.label} style={{ width: 96 }} defaultValue={dim.label} aria-label={`显示名 ${dim.field}`} onBlur={(e) => {
+          if (e.target.value !== dim.label) update({ label: e.target.value });
+        }} />
+        <Select size="small" style={{ width: 78 }} value={dim.sort?.by ?? 'sort_key'} onChange={(v) => update({ sort: { by: v, dir: dim.sort?.dir ?? 'asc' } })} options={[
+          { value: 'sort_key', label: 'sort_key' },
+          { value: 'value', label: '值' },
+        ]} />
+        <Switch checked={dim.sort?.dir === 'desc'} checkedChildren="降" unCheckedChildren="升"
+          onChange={(v) => update({ sort: { by: dim.sort?.by ?? 'sort_key', dir: v ? 'desc' : 'asc' } })} />
+      </div>
     </div>
   );
 }
@@ -91,7 +106,7 @@ export function DimensionsPanel() {
       const draft = d as DraftShape;
       const dims = Array.isArray(draft.dimensions) ? (draft.dimensions as DimensionDef[]) : [];
       if (dims.some((x) => x.field === field)) return;
-      draft.dimensions = [...dims, { field, label: f?.label ?? field, sort: { by: 'sort_key', dir: 'asc' } }];
+      draft.dimensions = [...dims, { field, label: f?.label ?? field, axis: 'row', sort: { by: 'sort_key', dir: 'asc' } }];
     });
   };
 
@@ -106,9 +121,14 @@ export function DimensionsPanel() {
     });
   };
 
+  const rowCount = dims.filter((d) => (d.axis ?? 'row') === 'row').length;
+  const colCount = dims.length - rowCount;
+
   return (
     <Card size="small" className="ate-panel" title="维度与排序">
-      <div className="panel-muted" data-testid="sort-hint">排序依据：{dims[0]?.sort?.by ?? '—'}</div>
+      <div className="panel-muted" data-testid="sort-hint">
+        排序依据：{dims[0]?.sort?.by ?? '—'} · 布局：行 {rowCount} / 列 {colCount}
+      </div>
       <DndContext sensors={sensors} onDragEnd={onDragEnd}>
         <SortableContext items={dims.map((x) => x.field)} strategy={verticalListSortingStrategy}>
           {dims.map((dim, i) => <SortableItem key={dim.field} dim={dim} index={i} />)}

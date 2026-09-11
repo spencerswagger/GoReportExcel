@@ -8,8 +8,19 @@ test('happy path: export then poll shows download link', async () => {
   fireEvent.click(screen.getByRole('button', { name: /导\s*出/ }));
   // mock 的 GET /export 立即返回 done，轮询 1s 后停止，放宽 waitFor 超时。
   await waitFor(() => {
-    expect(screen.getByText('下载 xlsx')).toBeTruthy();
+    expect(screen.getByText('下载数据')).toBeTruthy();
   }, { timeout: 3000 });
+});
+
+test('download endpoint returns real csv file stream (not SPA fallback)', async () => {
+  const res = await fetch('/v1/export/task-1/download?def_id=rpt_sales');
+  expect(res.ok).toBe(true);
+  expect(res.headers.get('Content-Type')).toContain('text/csv');
+  const text = await res.text();
+  // 表头与明细数据来自真实 schema 渲染
+  expect(text).toContain('大区');
+  expect(text).toContain('销售额');
+  expect(text).toContain('华东');
 });
 
 test('failure path: submit export 500 shows error alert', async () => {

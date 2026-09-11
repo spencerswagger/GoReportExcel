@@ -125,6 +125,6 @@ export function exportStatus(taskId: string) {
   return req<TaskStatus>(`/export/${taskId}`);
 }
 
-export function exportDownloadUrl(taskId: string) {
-  return `${BASE}/export/${taskId}/download`;
+export function exportDownloadUrl(taskId: string, defId?: string) {
+  return `${BASE}/export/${taskId}/download${defId ? `?def_id=${encodeURIComponent(defId)}` : ''}`;
 }
