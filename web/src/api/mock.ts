@@ -549,9 +549,14 @@ export const handlers = [
   }),
 
   http.post('*/v1/render', async ({ request }) => {
-    const body = await request.json().catch(() => ({})) as { def_id?: string; row_window?: { from: number; to: number } };
-    // 未保存过草稿时按"新报表 →空配置 / 演示报表→默认配置"兜底，保证新建报表预览从空开始
-    const payload = draftCache.get(body.def_id ?? '') ?? draftFor(body.def_id ?? 'rpt_new');
+    const body = await request.json().catch(() => ({})) as {
+      def_id?: string;
+      row_window?: { from: number; to: number };
+      payload?: Partial<typeof defaultDraftPayload>;
+    };
+    // 预览渲染以编辑器当前草稿 payload 为准（前端即真相源），杜绝跨会话/跨导航缓存残留；
+    // 未携带 payload 时回退到已保存草稿/默认配置（兼容测试与外部调用）。
+    const payload = body.payload ?? draftCache.get(body.def_id ?? '') ?? draftFor(body.def_id ?? 'rpt_new');
     const schema = buildMockSchema(payload);
     if (body.row_window) {
       const { from, to } = body.row_window;
@@ -585,32 +590,87 @@ export const handlers = [
     HttpResponse.json({ id: 'task-1', state: 'done', progress: 1, updated_at: '2026-09-05T00:00:01Z' }),
   ),
 
-  http.get('*/v1/export/:taskId/download', ({ request }) => {
-    // 导出下载：按草稿缓存的配置动态生成 CSV 文件流（真实行聚合），不再返回 SPA 页面
+  http.get('*/v1/export/:taskId/download', async ({ request }) => {
+    // 导出下载：按最近保存的草稿配置动态生成真实 Excel（带表头样式/合并/数据条），不再返回 SPA 页面
     const defId = new URL(request.url).searchParams.get('def_id') ?? 'rpt_sales';
     const payload = draftCache.get(defId) ?? draftFor(defId);
     const schema = buildMockSchema(payload);
-    const csv = csvFromSchema(schema);
+    const buf = await xlsxFromSchema(schema);
     const reportName = (payload.name ?? 'report').replace(/[\\/"]/g, '_').trim() || 'report';
     // Header 值必须 ASCII 合法：filename 用安全化名称，中文名经 filename*=UTF-8 传给现代浏览器
     const asciiName = reportName.replace(/[^\x20-\x7E]/g, '_');
-    const disposition = `attachment; filename="${asciiName}.csv"; filename*=UTF-8''${encodeURIComponent(`${reportName}.csv`)}`;
-    return new HttpResponse(csv, {
+    const disposition = `attachment; filename="${asciiName}.xlsx"; filename*=UTF-8''${encodeURIComponent(`${reportName}.xlsx`)}`;
+    return new HttpResponse(buf, {
       headers: {
-        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Disposition': disposition,
       },
     });
   }),
 ];
 
-/** schema → UTF-8 CSV（RFC 4180，带 BOM 便于 Excel 识别中文） */
-function csvFromSchema(schema: RenderSchema): string {
-  const esc = (v: string) => (/[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-  const lines = [schema.cols.map((c) => esc(c.label)).join(',')];
-  for (const r of schema.rows) {
-    if (r.type !== 'detail') continue;
-    lines.push(r.cells.map((c) => esc(c.display)).join(','));
+/**
+ * schema → 真实 Excel 工作簿（.xlsx）字节流：
+ * 表头/明细/小计/总计按 s1/s2/s3 样式映射（底色、加粗、边框、对齐、数字格式），
+ * 维度列跨组合并，首指标列附加数据条条件格式。
+ */
+async function xlsxFromSchema(schema: RenderSchema): Promise<ArrayBuffer> {
+  const ExcelJS = await import('exceljs');
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('报表');
+
+  const argb = (hex?: string) => (hex && hex.startsWith('#') ? hex.replace('#', 'FF') : undefined);
+  const BORDER = { style: 'thin' as const, color: { argb: 'FF9AA7B0' } };
+  const border = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER };
+
+  for (const row of schema.rows) {
+    const excelRow = ws.getRow(row.idx);
+    for (const cell of row.cells) {
+      const st = SCHEMA_STYLES[cell.style] ?? SCHEMA_STYLES.s2;
+      const target = excelRow.getCell(cell.col + 1);
+      target.value = typeof cell.value === 'number' ? cell.value : cell.display;
+      target.font = { bold: st.Bold === true, color: { argb: argb(st.FontColor) ?? 'FF1F2937' } };
+      target.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(st.Fill) ?? 'FFFFFFFF' } };
+      target.border = border;
+      const meta = schema.cols.find((c) => c.idx === cell.col);
+      if (meta) {
+        target.alignment = { horizontal: meta.align === 'right' ? 'right' : 'left', vertical: 'middle' };
+        if (meta.num_fmt && typeof cell.value === 'number') target.numFmt = meta.num_fmt;
+      }
+    }
   }
-  return `\uFEFF${lines.join('\r\n')}`;
+
+  schema.cols.forEach((c) => {
+    // Excel 列宽单位为字符位宽，由渲染宽度换算
+    ws.getColumn(c.idx + 1).width = Math.max(10, Math.round(c.width / 7));
+  });
+
+  // 维度列跨行合并（r1/r2/c 均为 1-based，对应 rows.idx 与 cols.idx）
+  for (const m of schema.merges ?? []) {
+    try { ws.mergeCells(m.r1, m.c, m.r2, m.c); } catch { /* 越界或冲突忽略 */ }
+  }
+
+  // 首指标列数据条
+  const firstMetric = schema.cols.find((c) => c.role === 'metric');
+  if (firstMetric) {
+    const colLetter = String.fromCharCode(65 + firstMetric.idx);
+    const last = Math.max(2, schema.rows.length);
+    try {
+      // exceljs 数据条最低需要 type + cfvo 数组
+      ws.addConditionalFormatting({
+        ref: `${colLetter}2:${colLetter}${last}`,
+        rules: [{
+          type: 'dataBar',
+          priority: 1,
+          gradient: true,
+          cfvo: [{ type: 'min' }, { type: 'max' }],
+        }],
+      });
+    } catch { /* exceljs 版本不支持 dataBar 时忽略，不影响文件生成 */ }
+  }
+
+  const raw = await wb.xlsx.writeBuffer();
+  if (raw instanceof ArrayBuffer) return raw;
+  const bytes = raw as Uint8Array;
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }

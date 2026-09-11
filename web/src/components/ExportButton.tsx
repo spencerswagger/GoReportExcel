@@ -2,6 +2,17 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, Progress } from 'antd';
 import { exportDownloadUrl, exportStatus, submitExport } from '../api/client';
 
+/** 从 Content-Disposition 解析下载文件名：优先 filename*=UTF-8''（中文名），回退 filename */
+function fileNameFromDisposition(header: string | null): string {
+  if (!header) return 'report.xlsx';
+  const star = header.match(/filename\*=(?:UTF-8'')?([^;]+)/i);
+  if (star) {
+    try { return decodeURIComponent(star[1].trim()); } catch { /* 非法编码时回退 */ }
+  }
+  const plain = header.match(/filename="?([^";]+)"?/i);
+  return plain?.[1] ?? 'report.xlsx';
+}
+
 export function ExportButton({ defId }: { defId: string }) {
   const [taskId, setTaskId] = useState<string | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
@@ -25,15 +36,18 @@ export function ExportButton({ defId }: { defId: string }) {
     return () => { cancelledRef.current = true; stopPoll(); };
   }, []);
 
-  const busy = progress != null && state !== 'done' && state !== 'failed';
+  // busy 以显式任务状态判断：每次导出都先置 queued，保证第二次点击导出有完整反馈
+  const busy = state === 'queued' || state === 'running';
 
   const start = async () => {
     setErr(null);
+    setState('queued');
+    setProgress(0);
+    setTaskId(null);
     try {
       const res = await submitExport({ def_id: defId, idempotency_key: `manual-${Date.now()}` });
       if (cancelledRef.current) return;
       setTaskId(res.task_id);
-      setProgress(0);
       poll(res.task_id);
     } catch (e) {
       if (cancelledRef.current) return;
@@ -76,7 +90,7 @@ export function ExportButton({ defId }: { defId: string }) {
     try {
       const res = await fetch(exportDownloadUrl(tid, defId));
       if (!res.ok) throw new Error(`下载失败 ${res.status}`);
-      const name = res.headers.get('Content-Disposition')?.match(/filename="?([^";]+)"?/)?.[1] ?? 'report.csv';
+      const name = fileNameFromDisposition(res.headers.get('Content-Disposition'));
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');

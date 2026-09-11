@@ -75,7 +75,8 @@ export default function EditorLayout() {
         const base = d.version;
         const payload = JSON.parse(d.payload);
         if (!cancelled) setDraft({ ...payload, id }, base);
-        const r = await renderPreview({ def_id: id, row_window: { from: 0, to: 50 } });
+        // 预览以当前编辑器草稿为准（打开新建报表即空白），不读取后端缓存
+        const r = await renderPreview({ def_id: id, row_window: { from: 0, to: 50 }, payload: useEditorStore.getState().draft });
         if (!cancelled) setRender(r.schema, r.schema.report.row_total);
       } catch (e) {
         if (!cancelled) {
@@ -90,12 +91,12 @@ export default function EditorLayout() {
   useEffect(() => load(), [load]);
 
   // 草稿变化后自动重新渲染预览（防抖），保证配置实时反映到画布。
-  // mock 后端从草稿缓存读取配置，用户添加/删除维度指标后预览随之更新。
+  // 预览始终以当前草稿 payload 渲染（前端真相源），用户添加/删除维度指标后预览随之更新。
   useEffect(() => {
     if (!draft) return;
     let cancelled = false;
     const t = window.setTimeout(() => {
-      renderPreview({ def_id: defId, row_window: { from: 0, to: 50 } })
+      renderPreview({ def_id: defId, row_window: { from: 0, to: 50 }, payload: draft })
         .then((r) => { if (!cancelled) setRender(r.schema, r.schema.report.row_total); })
         .catch(() => {});
     }, 500);

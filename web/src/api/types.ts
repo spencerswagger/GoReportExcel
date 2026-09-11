@@ -127,6 +127,8 @@ export interface RenderRequest {
   def_id: string;
   version?: number;
   row_window?: { from: number; to: number };
+  /** 编辑器当前草稿 payload：预览始终以该配置渲染，不读后端缓存 */
+  payload?: unknown;
 }
 
 export interface ExplainResult {

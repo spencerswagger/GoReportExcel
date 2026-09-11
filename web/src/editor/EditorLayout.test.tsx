@@ -35,7 +35,7 @@ test('loads draft and renders config rail and canvas', async () => {
   await waitFor(() => {
     expect(useEditorStore.getState().draft).not.toBeNull();
   });
-  expect(screen.getByText('维度与排序')).toBeTruthy();
+  expect(screen.getByText('维度配置')).toBeTruthy();
   expect(screen.getByText('样式规则（图层）')).toBeTruthy();
   // 检查器不再占据固定右列：未选中单元格时不渲染浮层
   expect(screen.queryByText('检查器')).toBeNull();
