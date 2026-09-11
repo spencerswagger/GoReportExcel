@@ -217,6 +217,11 @@ export function buildPreview(
     rows: rowDimKeys,
     columns: colsDimKeys as string[],
     values: metricCols.map((c) => c.metric as string),
+    // 必须放在 fields 内：S2 只读取 fields.valueInCols 决定数值列归属
+    // （dataCfg 顶层同名字段不会被 processDataCfg 读取）。columns 为空时若为 false，
+    // EXTRA_FIELD 会落到行头，把指标当成行维度叶子（root[&]大区[&]amount），
+    // 造成列区零节点、数据格不渲染，画布只剩"金额▼"/空白。
+    valueInCols: true,
   };
 
   const meta = [
@@ -268,13 +273,11 @@ export function buildPreview(
     },
   };
 
-  // valueInCols 必须显式开启：columns 为空时 S2 默认 false 会把指标当作行维度叶子节点
-  // （root[&]大区[&]amount），导致列区零节点、数据格不渲染，画布只剩"金额▼"/空白。
+  // 数值列归属由 fields.valueInCols 决定（见上方 fields 定义），数据格按记录聚合渲染
   const dataCfg: S2DataConfig = {
     data: records as unknown as RawData[],
     fields,
     meta,
-    valueInCols: true,
   };
 
   return {
