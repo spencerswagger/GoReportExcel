@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Button, Dropdown, MenuProps, Spin } from 'antd';
+import { Alert, Button, Dropdown, MenuProps, Segmented, Spin } from 'antd';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError, getDraft, getPublished, publish, renderPreview } from '../api/client';
 import { useEditorStore } from '../store/editor';
@@ -12,7 +12,9 @@ import { RuleBuilder } from '../panels/RuleBuilder';
 import { ConditionalFormatsPanel } from '../panels/ConditionalFormatsPanel';
 import { PageSetupPanel } from '../panels/PageSetupPanel';
 import { Inspector } from '../panels/Inspector';
-import PreviewCanvas from './PreviewCanvas';
+import { DatasetPanel } from '../panels/DatasetPanel';
+import PreviewSheet from '../s2/PreviewSheet';
+import { getPreview, setPreview, PREVIEW_HIERARCHY_TYPES, type PreviewHierarchyType } from '../s2/hierarchy';
 import { applyTheme, listThemes } from '../themes';
 
 function SaveChip({ state }: { state: string }) {
@@ -73,7 +75,8 @@ export default function EditorLayout() {
         const base = d.version;
         const payload = JSON.parse(d.payload);
         if (!cancelled) setDraft({ ...payload, id }, base);
-        const r = await renderPreview({ def_id: id, row_window: { from: 0, to: 50 } });
+        // 预览以当前编辑器草稿为准（打开新建报表即空白），不读取后端缓存
+        const r = await renderPreview({ def_id: id, row_window: { from: 0, to: 50 }, payload: useEditorStore.getState().draft });
         if (!cancelled) setRender(r.schema, r.schema.report.row_total);
       } catch (e) {
         if (!cancelled) {
@@ -86,6 +89,19 @@ export default function EditorLayout() {
   }, [id, reset, setDraft, setRender]);
 
   useEffect(() => load(), [load]);
+
+  // 草稿变化后自动重新渲染预览（防抖），保证配置实时反映到画布。
+  // 预览始终以当前草稿 payload 渲染（前端真相源），用户添加/删除维度指标后预览随之更新。
+  useEffect(() => {
+    if (!draft) return;
+    let cancelled = false;
+    const t = window.setTimeout(() => {
+      renderPreview({ def_id: defId, row_window: { from: 0, to: 50 }, payload: draft })
+        .then((r) => { if (!cancelled) setRender(r.schema, r.schema.report.row_total); })
+        .catch(() => {});
+    }, 500);
+    return () => { cancelled = true; window.clearTimeout(t); };
+  }, [defId, draft, setRender]);
 
   useAutosave(300);
   const saveState = useEditorStore((s) => s.saveState);
@@ -117,6 +133,9 @@ export default function EditorLayout() {
     label: `套用${t.name}`,
     onClick: () => applyThemeDraft(t.id),
   }));
+
+  // 读取草稿中的预览形态配置（默认 grid），供 Segmented 与 PreviewSheet 使用
+  const previewCfg = getPreview(draft as unknown as Record<string, unknown> | null);
 
   const doPublish = async () => {
     setPublishError(false);
@@ -183,6 +202,7 @@ export default function EditorLayout() {
       <div className="ate-editor-body">
         {/* 左：配置轨 */}
         <aside className="ate-rail" aria-label="配置面板">
+          <DatasetPanel />
           <DimensionsPanel />
           <MetricsPanel />
           <RuleBuilder />
@@ -194,6 +214,18 @@ export default function EditorLayout() {
         <section className="ate-canvas-zone" aria-label="预览画布">
           <div className="ate-canvas-bar">
             <span style={{ letterSpacing: '.06em' }}>实时预览</span>
+            <Segmented
+              size="small"
+              options={PREVIEW_HIERARCHY_TYPES.map((t) => ({ label: t, value: t }))}
+              value={previewCfg.hierarchy_type}
+              onChange={(v) => {
+                const next = v as PreviewHierarchyType;
+                if (next === previewCfg.hierarchy_type) return;
+                const s = useEditorStore.getState();
+                s.checkpoint(`切换预览形态 ${next}`);
+                s.mutateDraft((d) => { setPreview(d as unknown as Record<string, unknown>, { hierarchy_type: next }); });
+              }}
+            />
             <span className="mono" style={{ color: 'var(--ink-faint)' }}>
               {rowTotal} ROWS · {render ? `${render.cols.length} COLS` : '—'}
             </span>
@@ -209,21 +241,41 @@ export default function EditorLayout() {
           </div>
           <div className="ate-canvas-sheet">
             <div className="ate-sheet-frame">
-              {render ? (
-                <PreviewCanvas schema={render} selectedCell={selectedCell} onSelect={selectCell} zoom={zoom} />
+              {render && render.cols.length > 0 ? (
+                <PreviewSheet
+                  schema={render}
+                  hierarchyType={previewCfg.hierarchy_type}
+                  selectedCell={selectedCell}
+                  onSelect={selectCell}
+                  zoom={zoom}
+                />
               ) : (
-                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-faint)', fontFamily: "'Noto Serif SC', serif", fontSize: 15 }}>
-                  暂无预览
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-faint)', fontFamily: "'Noto Serif SC', serif", fontSize: 15, flexDirection: 'column', gap: 10 }}>
+                  <div style={{ fontSize: 28 }}>▦</div>
+                  <div>暂无预览</div>
+                  <div style={{ fontSize: 12.5, color: 'var(--ink-dim)', fontFamily: 'var(--font-ui)' }}>
+                    请先在左侧"数据集"面板选择数据集，再拖入维度与指标
+                  </div>
                 </div>
               )}
             </div>
           </div>
-        </section>
 
-        {/* 右：检查器 */}
-        <aside style={{ width: 286, minWidth: 286, overflowY: 'auto' }} aria-label="检查器">
-          <Inspector />
-        </aside>
+          {/* 选中单元格后悬浮展示的样式检查器（不再占据固定右列） */}
+          {selectedCell && (
+            <div className="ate-inspector-float" aria-label="检查器浮层">
+              <button
+                type="button"
+                className="ate-inspector-close"
+                aria-label="关闭检查器"
+                onClick={() => selectCell(null)}
+              >
+                ×
+              </button>
+              <Inspector />
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );

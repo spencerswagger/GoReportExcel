@@ -1,5 +1,5 @@
 import type {
-  ExportSubmitResult, ExplainResult, RenderRequest, RenderSchema, TaskStatus,
+  DataSourceInfo, DatasetInfo, ExportSubmitResult, ExplainResult, RenderRequest, RenderSchema, TaskStatus,
   TraceResult, VersionInfo,
 } from './types';
 
@@ -73,6 +73,47 @@ export function dataTrace(cellId: string, defId: string) {
   return req<TraceResult>(`/cells/${cellId}/data-trace?def_id=${encodeURIComponent(defId)}`);
 }
 
+export function fetchDataSources() {
+  return req<DataSourceInfo[]>('/datasources');
+}
+
+export function fetchDatasets() {
+  return req<DatasetInfo[]>('/datasets');
+}
+
+export function fetchDataset(id: string) {
+  return req<DatasetInfo & { sample_rows?: Array<Record<string, unknown>> }>(`/datasets/${id}`);
+}
+
+export function createDataSource(body: { name: string; file_name: string; content: string }) {
+  return req<DataSourceInfo>('/datasources', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export function uploadTable(sourceId: string, body: { file_name: string; content: string }) {
+  return req<{ ok: string; tables: string[] }>(`/datasources/${sourceId}/tables`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteDataSource(id: string) {
+  return req<{ ok: string }>(`/datasources/${id}`, { method: 'DELETE' });
+}
+
+export function createDataset(body: { name: string; source_ref: string; table?: string }) {
+  return req<DatasetInfo>('/datasets', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteDataset(id: string) {
+  return req<{ ok: string }>(`/datasets/${id}`, { method: 'DELETE' });
+}
+
 export function submitExport(body: { def_id: string; version?: number; idempotency_key?: string }) {
   return req<ExportSubmitResult>('/export', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -84,6 +125,6 @@ export function exportStatus(taskId: string) {
   return req<TaskStatus>(`/export/${taskId}`);
 }
 
-export function exportDownloadUrl(taskId: string) {
-  return `${BASE}/export/${taskId}/download`;
+export function exportDownloadUrl(taskId: string, defId?: string) {
+  return `${BASE}/export/${taskId}/download${defId ? `?def_id=${encodeURIComponent(defId)}` : ''}`;
 }

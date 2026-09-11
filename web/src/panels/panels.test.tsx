@@ -1,11 +1,12 @@
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { DimensionsPanel, reorderDims } from './DimensionsPanel';
 import { MetricsPanel } from './MetricsPanel';
+import { DatasetPanel } from './DatasetPanel';
 import { ConditionalFormatsPanel } from './ConditionalFormatsPanel';
 import { PageSetupPanel } from './PageSetupPanel';
 import { useEditorStore } from '../store/editor';
 import type { DraftShape } from '../store/editor';
-import type { DimensionDef } from '../store/types';
+import type { DimensionDef, MetricDef } from '../store/types';
 
 function seededDraft(): DraftShape {
   return {
@@ -55,8 +56,9 @@ test('editing dimension label mutates draft via store', () => {
 
 test('MetricsPanel shows agg type', () => {
   render(<MetricsPanel />);
-  expect(screen.getByText('销售额')).toBeTruthy();
-  expect(screen.getByText('SUM')).toBeTruthy();
+  expect(screen.getByDisplayValue('销售额')).toBeTruthy();
+  // 聚合方式为可编辑的下拉，展示选项文案「求和 SUM」
+  expect(screen.getByText('求和 SUM')).toBeTruthy();
 });
 
 test('undo restores dimension label after edit', () => {
@@ -140,4 +142,70 @@ test('PageSetupPanel shows orientation and toggles landscape', () => {
   const lo = d.layout_opts as { print?: { orientation?: string } };
   expect(lo.print?.orientation).toBe('landscape');
   expect(useEditorStore.getState().saveState).toBe('dirty');
+});
+
+test('DatasetPanel shows empty state for new report and selecting dataset seeds fields', async () => {
+  const s = useEditorStore.getState();
+  s.setDraft({ id: 'rpt_new', version: 2, name: '新建报表' } as DraftShape, 2);
+  render(<DatasetPanel />);
+  // 新建报表未绑定数据集
+  expect(screen.getByText('未选择')).toBeTruthy();
+  // 从下拉选择"销售明细"
+  fireEvent.click(screen.getByTestId('dataset-picker'));
+  const item = await screen.findByText('销售明细 · ds_sales');
+  fireEvent.click(item);
+  const d = useEditorStore.getState().draft as DraftShape;
+  expect((d.dataset as { id?: string }).id).toBe('ds_sales');
+  const fields = (d.dataset as { fields: Array<{ key: string }> }).fields;
+  expect(fields.map((f) => f.key)).toContain('region');
+  // 切换数据集会清空维度/指标，字段池随之可用
+  expect(d.dimensions).toEqual([]);
+  expect(d.metrics).toEqual([]);
+  expect(screen.getByText('销售明细')).toBeTruthy();
+});
+
+function draftWithChannel(): DraftShape {
+  const d = seededDraft();
+  (d.dataset as { fields: Array<{ key: string; type: string }> }).fields = [
+    ...(d.dataset as { fields: Array<{ key: string; type: string }> }).fields,
+    { key: 'channel', type: 'string' },
+  ];
+  return d;
+}
+
+test('DimensionsPanel adds dimension from dataset field pool and removes it', () => {
+  const s = useEditorStore.getState();
+  s.setDraft(draftWithChannel(), 2);
+  render(<DimensionsPanel />);
+  // 从字段池添加 channel
+  fireEvent.click(screen.getByRole('button', { name: /添加维度/ }));
+  fireEvent.click(screen.getByText('channel · string'));
+  let dims = (useEditorStore.getState().draft as DraftShape).dimensions as DimensionDef[];
+  expect(dims.map((d) => d.field)).toContain('channel');
+  expect(useEditorStore.getState().saveState).toBe('dirty');
+  // 已占用字段不再出现在池中 → 删除 channel 后重新可用
+  fireEvent.click(screen.getByLabelText('删除维度 channel'));
+  dims = (useEditorStore.getState().draft as DraftShape).dimensions as DimensionDef[];
+  expect(dims.map((d) => d.field)).not.toContain('channel');
+});
+
+test('MetricsPanel adds metric from numeric pool, removes and reorders it', () => {
+  const s = useEditorStore.getState();
+  s.setDraft(draftWithChannel(), 2);
+  render(<MetricsPanel />);
+  // 字符串字段不作为指标候选：字段池仅数值列（channel 是 string）
+  expect(screen.queryByText('channel · string')).toBeNull();
+  // 添加数值字段 qty 为第二个指标
+  fireEvent.click(screen.getByRole('button', { name: /添加指标/ }));
+  fireEvent.click(screen.getByText('qty · number'));
+  let metrics = (useEditorStore.getState().draft as DraftShape).metrics as MetricDef[];
+  expect(metrics.map((m) => m.field)).toEqual(['amount', 'qty']);
+  // 上移 qty → 与 amount 换位
+  fireEvent.click(screen.getByLabelText('上移 qty'));
+  metrics = (useEditorStore.getState().draft as DraftShape).metrics as MetricDef[];
+  expect(metrics.map((m) => m.field)).toEqual(['qty', 'amount']);
+  // 删除 qty
+  fireEvent.click(screen.getByLabelText('删除指标 qty'));
+  metrics = (useEditorStore.getState().draft as DraftShape).metrics as MetricDef[];
+  expect(metrics.map((m) => m.field)).not.toContain('qty');
 });
