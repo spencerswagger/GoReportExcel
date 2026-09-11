@@ -133,63 +133,17 @@ function parseCsvText(text: string): ParsedTable {
 }
 
 // ---------------------------------------------------------------------------
-// 数据管理页 CRUD 持久化：写入并读回 localStorage，保证刷新/重进编辑器后
-// 用户新建的数据源、上传的表、数据集仍然存在（与真实平台行为一致）。
+// 数据管理页 CRUD：纯内存态（进程内仓库），不使用任何持久化/缓存。
+// 刷新页面后恢复种子数据；测试通过 resetMockStore() 隔离。
 // ---------------------------------------------------------------------------
-const STORE_KEY = 'go-report-mock-store-v2';
 
-interface MockStore {
-  sources: DataSourceInfo[];
-  datasets: Array<DatasetInfo & { table?: string; sample_rows?: Array<Record<string, unknown>> }>;
-  tables: Record<string, Record<string, ParsedTable>>;
-}
-
-function canPersist(): boolean {
-  try {
-    return typeof window !== 'undefined' && !!window.localStorage;
-  } catch {
-    return false;
-  }
-}
-
-function loadStore(): MockStore | null {
-  if (!canPersist()) return null;
-  try {
-    const raw = window.localStorage.getItem(STORE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as MockStore;
-    if (!parsed || !Array.isArray(parsed.sources) || !Array.isArray(parsed.datasets) || !parsed.tables) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function saveStore() {
-  if (!canPersist()) return;
-  try {
-    window.localStorage.setItem(STORE_KEY, JSON.stringify({
-      sources: dbSources,
-      datasets: dbDatasets,
-      tables: Object.fromEntries([...csvTables.entries()].map(([sid, m]) => [sid, Object.fromEntries([...m.entries()])])),
-    } as MockStore));
-  } catch { /* quota 等异常忽略，仅影响演示持久化 */ }
-}
-
-function resetStore() {
-  if (!canPersist()) return;
-  try { window.localStorage.removeItem(STORE_KEY); } catch { /* noop */ }
-}
-
-/** 测试隔离：清空持久化并恢复种子态（浏览器端也可通过 数据管理页面 手动清空） */
+/** 测试隔离：恢复种子态（清空新建数据源/表/数据集与草稿缓存） */
 export function resetMockStore() {
-  resetStore();
   dbSources.splice(0, dbSources.length, ...seedSources);
   dbDatasets.splice(0, dbDatasets.length, ...seedDatasetsStored);
   csvTables.clear();
   for (const [sid, tables] of initTables()) csvTables.set(sid, tables);
   draftCache.clear();
-  saveStore();
 }
 
 // 上传的 CSV 表存储：source_id → table 名 → 解析结果
@@ -220,19 +174,10 @@ function initTables(): Map<string, Map<string, ParsedTable>> {
   return m;
 }
 
-const storeData = loadStore();
-const dbSources: DataSourceInfo[] = storeData ? storeData.sources : [...seedSources];
-const dbDatasets: Array<DatasetInfo & { table?: string; sample_rows?: Array<Record<string, unknown>> }> =
-  storeData ? storeData.datasets : seedDatasetsStored;
-if (storeData) {
-  for (const [sid, tables] of Object.entries(storeData.tables)) {
-    csvTables.set(sid, new Map(Object.entries(tables)));
-  }
-} else {
-  // 首次访问（无持久化）：直接把种子的 orders.csv 表挂到表仓库，保证种子数据集可预览
-  csvTables.set('csv_local', new Map([['orders.csv', seedOrders]]));
-  saveStore();
-}
+const dbSources: DataSourceInfo[] = [...seedSources];
+const dbDatasets: Array<DatasetInfo & { table?: string; sample_rows?: Array<Record<string, unknown>> }> = [...seedDatasetsStored];
+// 种子表直接挂入表仓库（与 buildMockSchema 的 tableOf 共用），保证种子数据集可预览
+for (const [sid, tables] of initTables()) csvTables.set(sid, tables);
 
 export const mockDataSources: DataSourceInfo[] = [...dbSources];
 
@@ -446,7 +391,6 @@ export const handlers = [
     };
     csvTables.set(source.id, new Map([[fileName, parsed]]));
     dbSources.push(source);
-    saveStore();
     return HttpResponse.json(source, { status: 201 });
   }),
 
@@ -462,7 +406,6 @@ export const handlers = [
     tables.set(fileName, parsed);
     csvTables.set(source.id, tables);
     if (!source.tables?.includes(fileName)) source.tables = [...(source.tables ?? []), fileName];
-    saveStore();
     return HttpResponse.json({ ok: `table ${fileName} uploaded`, tables: source.tables });
   }),
 
@@ -471,7 +414,6 @@ export const handlers = [
     if (idx < 0) return HttpResponse.json({ error: 'datasource not found' }, { status: 404 });
     const [removed] = dbSources.splice(idx, 1);
     csvTables.delete(removed.id);
-    saveStore();
     return HttpResponse.json({ ok: 'deleted' });
   }),
 
@@ -507,7 +449,6 @@ export const handlers = [
       sample_rows,
     };
     dbDatasets.push(dataset);
-    saveStore();
     return HttpResponse.json(dataset, { status: 201 });
   }),
 
@@ -515,7 +456,6 @@ export const handlers = [
     const idx = dbDatasets.findIndex((d) => d.id === params.id);
     if (idx < 0) return HttpResponse.json({ error: 'dataset not found' }, { status: 404 });
     dbDatasets.splice(idx, 1);
-    saveStore();
     return HttpResponse.json({ ok: 'deleted' });
   }),
 
