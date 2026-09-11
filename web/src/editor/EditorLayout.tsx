@@ -12,6 +12,7 @@ import { RuleBuilder } from '../panels/RuleBuilder';
 import { ConditionalFormatsPanel } from '../panels/ConditionalFormatsPanel';
 import { PageSetupPanel } from '../panels/PageSetupPanel';
 import { Inspector } from '../panels/Inspector';
+import { DatasetPanel } from '../panels/DatasetPanel';
 import PreviewSheet from '../s2/PreviewSheet';
 import { getPreview, setPreview, PREVIEW_HIERARCHY_TYPES, type PreviewHierarchyType } from '../s2/hierarchy';
 import { applyTheme, listThemes } from '../themes';
@@ -87,6 +88,19 @@ export default function EditorLayout() {
   }, [id, reset, setDraft, setRender]);
 
   useEffect(() => load(), [load]);
+
+  // 草稿变化后自动重新渲染预览（防抖），保证配置实时反映到画布。
+  // mock 后端从草稿缓存读取配置，用户添加/删除维度指标后预览随之更新。
+  useEffect(() => {
+    if (!draft) return;
+    let cancelled = false;
+    const t = window.setTimeout(() => {
+      renderPreview({ def_id: defId, row_window: { from: 0, to: 50 } })
+        .then((r) => { if (!cancelled) setRender(r.schema, r.schema.report.row_total); })
+        .catch(() => {});
+    }, 500);
+    return () => { cancelled = true; window.clearTimeout(t); };
+  }, [defId, draft, setRender]);
 
   useAutosave(300);
   const saveState = useEditorStore((s) => s.saveState);
@@ -187,6 +201,7 @@ export default function EditorLayout() {
       <div className="ate-editor-body">
         {/* 左：配置轨 */}
         <aside className="ate-rail" aria-label="配置面板">
+          <DatasetPanel />
           <DimensionsPanel />
           <MetricsPanel />
           <RuleBuilder />
@@ -225,7 +240,7 @@ export default function EditorLayout() {
           </div>
           <div className="ate-canvas-sheet">
             <div className="ate-sheet-frame">
-              {render ? (
+              {render && render.cols.length > 0 ? (
                 <PreviewSheet
                   schema={render}
                   hierarchyType={previewCfg.hierarchy_type}
@@ -234,8 +249,12 @@ export default function EditorLayout() {
                   zoom={zoom}
                 />
               ) : (
-                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-faint)', fontFamily: "'Noto Serif SC', serif", fontSize: 15 }}>
-                  暂无预览
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-faint)', fontFamily: "'Noto Serif SC', serif", fontSize: 15, flexDirection: 'column', gap: 10 }}>
+                  <div style={{ fontSize: 28 }}>▦</div>
+                  <div>暂无预览</div>
+                  <div style={{ fontSize: 12.5, color: 'var(--ink-dim)', fontFamily: 'var(--font-ui)' }}>
+                    请先在左侧"数据集"面板选择数据集，再拖入维度与指标
+                  </div>
                 </div>
               )}
             </div>

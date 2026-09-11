@@ -154,6 +154,15 @@ const defaultDraftPayload = {
 // :: 内存草稿缓存：PUT draft 时保存，/v1/render 按最近保存的配置动态生成预览
 const draftCache = new Map<string, Partial<typeof defaultDraftPayload>>();
 
+// 新建报表的空白草稿：不预置数据集/维度/指标，由用户在编辑器中先选数据集再配置
+const blankDraftPayload = {
+  id: 'rpt_new',
+  version: 2,
+  name: '新建报表',
+};
+
+const draftFor = (id: string) => (id !== 'rpt_sales' ? { ...blankDraftPayload, id } : defaultDraftPayload);
+
 // 动态预览生成的取值域（演示数据）
 const DIM_VALUES: Record<string, string[]> = {
   region: ['华东', '华北'],
@@ -176,6 +185,19 @@ function cartesian(perDim: string[][]): string[][] {
 function buildMockSchema(payload: Partial<typeof defaultDraftPayload>): RenderSchema {
   const dims = payload.dimensions ?? [];
   const metrics = payload.metrics ?? [];
+  // 未选数据集/未配置维度与指标：返回空 schema，预览区由前端给出指引
+  if (dims.length === 0 && metrics.length === 0) {
+    return {
+      schema_version: 1,
+      report: { id: payload.id ?? 'rpt_new', def_version: payload.version ?? 2, row_total: 1 },
+      cols: [],
+      styles: {},
+      merges: [],
+      rows: [{ idx: 1, type: 'header', cells: [] }],
+      page_setup: { orientation: 'landscape', fit_to_width: 1, repeat_header_rows: 1 },
+      conditional_formats: [],
+    };
+  }
   const ds = mockDatasets.find((d) => d.id === (payload.dataset as { id?: string } | undefined)?.id) ?? mockDatasets[0];
   const fieldOf = (key: string) => ds.fields.find((f) => f.key === key);
 
@@ -300,14 +322,14 @@ export const handlers = [
   http.get('*/v1/definitions/:id/draft', ({ params }) =>
     HttpResponse.json({
       version: 2,
-      payload: JSON.stringify({ ...defaultDraftPayload, id: params.id, name: params.id === 'rpt_sales' ? '销售报表' : '新建报表' }),
+      payload: JSON.stringify({ ...draftFor(String(params.id)), name: String(params.id) === 'rpt_sales' ? '销售报表' : '新建报表' }),
     }),
   ),
 
   http.get('*/v1/definitions/:id/published', ({ params }) =>
     HttpResponse.json({
       version: 2,
-      payload: JSON.stringify({ ...defaultDraftPayload, id: params.id, name: params.id === 'rpt_sales' ? '销售报表' : '新建报表' }),
+      payload: JSON.stringify({ ...draftFor(String(params.id)), name: String(params.id) === 'rpt_sales' ? '销售报表' : '新建报表' }),
     }),
   ),
 
@@ -346,7 +368,8 @@ export const handlers = [
 
   http.post('*/v1/render', async ({ request }) => {
     const body = await request.json().catch(() => ({})) as { def_id?: string; row_window?: { from: number; to: number } };
-    const payload = draftCache.get(body.def_id ?? '') ?? { ...defaultDraftPayload, id: body.def_id ?? 'rpt_sales' };
+    // 未保存过草稿时按"新报表 →空配置 / 演示报表→默认配置"兜底，保证新建报表预览从空开始
+    const payload = draftCache.get(body.def_id ?? '') ?? draftFor(body.def_id ?? 'rpt_new');
     const schema = buildMockSchema(payload);
     if (body.row_window) {
       const { from, to } = body.row_window;

@@ -1,11 +1,12 @@
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { DimensionsPanel, reorderDims } from './DimensionsPanel';
 import { MetricsPanel } from './MetricsPanel';
+import { DatasetPanel } from './DatasetPanel';
 import { ConditionalFormatsPanel } from './ConditionalFormatsPanel';
 import { PageSetupPanel } from './PageSetupPanel';
 import { useEditorStore } from '../store/editor';
 import type { DraftShape } from '../store/editor';
-import type { DimensionDef } from '../store/types';
+import type { DimensionDef, MetricDef } from '../store/types';
 
 function seededDraft(): DraftShape {
   return {
@@ -140,6 +141,26 @@ test('PageSetupPanel shows orientation and toggles landscape', () => {
   const lo = d.layout_opts as { print?: { orientation?: string } };
   expect(lo.print?.orientation).toBe('landscape');
   expect(useEditorStore.getState().saveState).toBe('dirty');
+});
+
+test('DatasetPanel shows empty state for new report and selecting dataset seeds fields', async () => {
+  const s = useEditorStore.getState();
+  s.setDraft({ id: 'rpt_new', version: 2, name: '新建报表' } as DraftShape, 2);
+  render(<DatasetPanel />);
+  // 新建报表未绑定数据集
+  expect(screen.getByText('未选择')).toBeTruthy();
+  // 从下拉选择"销售明细"
+  fireEvent.click(screen.getByTestId('dataset-picker'));
+  const item = await screen.findByText('销售明细 · ds_sales');
+  fireEvent.click(item);
+  const d = useEditorStore.getState().draft as DraftShape;
+  expect((d.dataset as { id?: string }).id).toBe('ds_sales');
+  const fields = (d.dataset as { fields: Array<{ key: string }> }).fields;
+  expect(fields.map((f) => f.key)).toContain('region');
+  // 切换数据集会清空维度/指标，字段池随之可用
+  expect(d.dimensions).toEqual([]);
+  expect(d.metrics).toEqual([]);
+  expect(screen.getByText('销售明细')).toBeTruthy();
 });
 
 function draftWithChannel(): DraftShape {
