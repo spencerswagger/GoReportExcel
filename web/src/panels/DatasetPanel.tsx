@@ -22,14 +22,11 @@ export function DatasetPanel() {
   const currentId = (draftShape?.dataset as { id?: string } | undefined)?.id;
   const current = datasets.find((d) => d.id === currentId);
 
-  const items: MenuProps['items'] = (datasets.length ? datasets : [
-    { id: 'ds_sales', name: '销售明细' },
-    { id: 'ds_employees', name: '员工花名册' },
-  ]).map((d) => ({ key: d.id, label: `${d.name} · ${d.id}` }));
+  const items: MenuProps['items'] = (datasets.length ? datasets : [ds_salesFallback]).map((d) => ({ key: d.id, label: `${d.name} · ${d.id}` }));
 
   const selectDataset = (id: string) => {
     if (id === currentId) return;
-    const d = datasets.find((x) => x.id === id) ?? fallbackDatasets.find((x) => x.id === id);
+    const d = datasets.find((x) => x.id === id) ?? (id === ds_salesFallback.id ? ds_salesFallback : undefined);
     if (!d) return;
     checkpoint(`选择数据集 ${d.name}`);
     mutateDraft((dd) => {
@@ -74,26 +71,13 @@ export function DatasetPanel() {
   );
 }
 
-const fallbackDatasets: Array<Pick<DatasetInfo, 'id' | 'name' | 'source_ref'> & { fields: DatasetInfo['fields'] }> = [
-  {
-    id: 'ds_sales', name: '销售明细', source_ref: 'csv_local',
-    fields: [
-      { key: 'region', type: 'string', label: '大区', sort_key: 'region_order' },
-      { key: 'city', type: 'string', label: '城市' },
-      { key: 'channel', type: 'string', label: '渠道' },
-      { key: 'amount', type: 'number', label: '销售额' },
-      { key: 'qty', type: 'number', label: '件数' },
-      { key: 'cost', type: 'number', label: '成本' },
-      { key: 'order_date', type: 'date', label: '下单日期' },
-    ],
-  },
-  {
-    id: 'ds_employees', name: '员工花名册', source_ref: 'csv_local',
-    fields: [
-      { key: 'dept', type: 'string', label: '部门' },
-      { key: 'grade', type: 'string', label: '职级' },
-      { key: 'headcount', type: 'number', label: '人数' },
-      { key: 'salary', type: 'number', label: '薪资' },
-    ],
-  },
-];
+const ds_salesFallback: Pick<DatasetInfo, 'id' | 'name' | 'source_ref'> & { fields: DatasetInfo['fields'] } = {
+  id: 'ds_sales', name: '销售明细', source_ref: 'csv_local',
+  fields: [
+    { key: 'region', type: 'string', label: '大区' },
+    { key: 'city', type: 'string', label: '城市' },
+    { key: 'channel', type: 'string', label: '渠道' },
+    { key: 'amount', type: 'number', label: '金额' },
+    { key: 'qty', type: 'number', label: '件数' },
+  ],
+};

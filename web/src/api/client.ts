@@ -81,8 +81,19 @@ export function fetchDatasets() {
   return req<DatasetInfo[]>('/datasets');
 }
 
-export function createDataSource(body: { name: string; kind?: string }) {
+export function fetchDataset(id: string) {
+  return req<DatasetInfo & { sample_rows?: Array<Record<string, unknown>> }>(`/datasets/${id}`);
+}
+
+export function createDataSource(body: { name: string; file_name: string; content: string }) {
   return req<DataSourceInfo>('/datasources', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export function uploadTable(sourceId: string, body: { file_name: string; content: string }) {
+  return req<{ ok: string; tables: string[] }>(`/datasources/${sourceId}/tables`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
@@ -92,7 +103,7 @@ export function deleteDataSource(id: string) {
   return req<{ ok: string }>(`/datasources/${id}`, { method: 'DELETE' });
 }
 
-export function createDataset(body: { name: string; source_ref: string; record_count?: number }) {
+export function createDataset(body: { name: string; source_ref: string; table?: string }) {
   return req<DatasetInfo>('/datasets', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),

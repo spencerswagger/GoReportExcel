@@ -1,5 +1,6 @@
 import { http, HttpResponse } from 'msw';
-import type { CellDTO, DataSourceInfo, DatasetFieldInfo, DatasetInfo, MergeInfo, RenderSchema, RowDTO } from './types';
+import type { CellDTO, DataSourceInfo, DatasetFieldInfo, DatasetInfo, RenderSchema, RowDTO } from './types';
+import ordersCsvRaw from './fixtures/orders.csv?raw';
 
 // ---------------------------------------------------------------------------
 // fixtureSchema — 单分组报表（2 维度：大区/城市，3 个城市分组，共 11 行）
@@ -90,86 +91,145 @@ export const fixtureSchema: RenderSchema = {
 
 // ---------------------------------------------------------------------------
 // 数据源 / 数据集（可变内存仓库：支持数据管理页增删改查）
+// 种子数据全部来自真实 CSV 文件（fixtures/orders.csv）解析，不内置任何模拟生成。
 // ---------------------------------------------------------------------------
 
-export const mockDataSources: DataSourceInfo[] = [
-  { id: 'csv_local', name: '本地 CSV 目录', kind: 'csv', detail: 'csv_local · 按目录扫描 <table>.csv', tables: ['sales.csv', 'employees.csv'] },
-  { id: 'dw', name: '数据仓库 PgSQL', kind: 'db', detail: 'postgres://dw · 只读账号', tables: ['dw.sales_fact', 'dw.dim_region'] },
-];
+// CSV 上传解析：真实文件 → 表（列字段 + 数据行），供数据集与报表预览消费
+const COLUMN_LABELS: Record<string, string> = {
+  order_id: '订单号', order_date: '下单日期', region: '大区', city: '城市',
+  channel: '渠道', customer: '客户', product: '商品', amount: '金额', qty: '件数',
+  dept: '部门', grade: '职级', salary: '薪资', headcount: '人数',
+};
 
-/** 订单 CSV 表：新数据源默认携带 orders.csv，字段来自这里的订单定义 */
-const ORDERS_TABLE = 'orders.csv';
-const ORDER_FIELDS: DatasetFieldInfo[] = [
-  { key: 'order_id', type: 'string', label: '订单号' },
-  { key: 'order_date', type: 'date', label: '下单日期' },
-  { key: 'region', type: 'string', label: '大区', sort_key: 'region_order' },
-  { key: 'city', type: 'string', label: '城市' },
-  { key: 'channel', type: 'string', label: '渠道' },
-  { key: 'customer', type: 'string', label: '客户' },
-  { key: 'product', type: 'string', label: '商品' },
-  { key: 'amount', type: 'number', label: '金额' },
-  { key: 'qty', type: 'number', label: '件数' },
-];
-
-const REGIONS = ['华东', '华北', '华南'];
-const CITIES: Record<string, string[]> = { 华东: ['上海', '杭州', '南京'], 华北: ['北京', '天津'], 华南: ['广州', '深圳'] };
-const CHANNELS = ['线上', '门店'];
-const PRODUCTS = ['iPhone 15', 'MacBook Air', 'iPad Pro', 'AirPods Pro', 'Apple Watch'];
-
-/** 生成订单记录（演示数据，模拟读取 orders.csv） */
-function sampleOrders(n: number): Array<Record<string, unknown>> {
-  const rows: Array<Record<string, unknown>> = [];
-  for (let i = 1; i <= n; i++) {
-    const region = REGIONS[i % REGIONS.length];
-    const city = CITIES[region][i % CITIES[region].length];
-    const date = new Date(Date.UTC(2026, 5 + (i % 3), (i * 7) % 28 + 1));
-    rows.push({
-      order_id: `SO-202609-${String(i).padStart(4, '0')}`,
-      order_date: date.toISOString().slice(0, 10),
-      region, city,
-      channel: CHANNELS[i % CHANNELS.length],
-      customer: `客户${String.fromCharCode(65 + (i % 8))}`,
-      product: PRODUCTS[i % PRODUCTS.length],
-      amount: [980, 1299, 799, 199, 399][i % 5] + (i % 3) * 100,
-      qty: (i % 4) + 1,
-    });
-  }
-  return rows;
+function inferType(v: string): DatasetFieldInfo['type'] {
+  if (v.trim() !== '' && !Number.isNaN(Number(v))) return 'number';
+  if (/^\d{4}-\d{2}-\d{2}/.test(v)) return 'date';
+  return 'string';
 }
 
-// 数据管理页 CRUD 的内存态（HMR/刷新后重置，演示用）
-const dbSources: DataSourceInfo[] = [...mockDataSources];
+interface ParsedTable {
+  fields: DatasetFieldInfo[];
+  columns: string[];
+  rows: Array<Record<string, unknown>>;
+}
 
-// 种子数据集（初始化 dbDatasets 用；mockDatasets 由 dbDatasets 派生，供编辑器字段池等复用）
-const seedDatasets: Array<DatasetInfo & { table?: string }> = [
+/** 解析 CSV 文本：首行表头 → 字段（按值推断类型），其余为数据行 */
+function parseCsvText(text: string): ParsedTable {
+  const lines = text.replace(/\r/g, '').split('\n').filter((l) => l.trim() !== '');
+  const headers = (lines[0] ?? '').split(',').map((h) => h.trim()).filter(Boolean);
+  const rows: Array<Record<string, unknown>> = [];
+  for (const line of lines.slice(1)) {
+    const cells = line.split(',').map((c) => c.trim());
+    if (cells.length !== headers.length) continue;
+    const rec: Record<string, unknown> = {};
+    headers.forEach((h, i) => { rec[h] = cells[i]; });
+    rows.push(rec);
+  }
+  const fields: DatasetFieldInfo[] = headers.map((h) => {
+    const sample = rows.find((r) => String(r[h] ?? '').trim() !== '');
+    return { key: h, type: inferType(String(sample?.[h] ?? '')), label: COLUMN_LABELS[h] ?? h };
+  });
+  return { fields, columns: headers, rows };
+}
+
+// ---------------------------------------------------------------------------
+// 数据管理页 CRUD 持久化：写入并读回 localStorage，保证刷新/重进编辑器后
+// 用户新建的数据源、上传的表、数据集仍然存在（与真实平台行为一致）。
+// ---------------------------------------------------------------------------
+const STORE_KEY = 'go-report-mock-store-v2';
+
+interface MockStore {
+  sources: DataSourceInfo[];
+  datasets: Array<DatasetInfo & { table?: string; sample_rows?: Array<Record<string, unknown>> }>;
+  tables: Record<string, Record<string, ParsedTable>>;
+}
+
+function canPersist(): boolean {
+  try {
+    return typeof window !== 'undefined' && !!window.localStorage;
+  } catch {
+    return false;
+  }
+}
+
+function loadStore(): MockStore | null {
+  if (!canPersist()) return null;
+  try {
+    const raw = window.localStorage.getItem(STORE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as MockStore;
+    if (!parsed || !Array.isArray(parsed.sources) || !Array.isArray(parsed.datasets) || !parsed.tables) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveStore() {
+  if (!canPersist()) return;
+  try {
+    window.localStorage.setItem(STORE_KEY, JSON.stringify({
+      sources: dbSources,
+      datasets: dbDatasets,
+      tables: Object.fromEntries([...csvTables.entries()].map(([sid, m]) => [sid, Object.fromEntries([...m.entries()])])),
+    } as MockStore));
+  } catch { /* quota 等异常忽略，仅影响演示持久化 */ }
+}
+
+function resetStore() {
+  if (!canPersist()) return;
+  try { window.localStorage.removeItem(STORE_KEY); } catch { /* noop */ }
+}
+
+/** 测试隔离：清空持久化并恢复种子态（浏览器端也可通过 数据管理页面 手动清空） */
+export function resetMockStore() {
+  resetStore();
+  dbSources.splice(0, dbSources.length, ...seedSources);
+  dbDatasets.splice(0, dbDatasets.length, ...seedDatasetsStored);
+  csvTables.clear();
+  for (const [sid, tables] of initTables()) csvTables.set(sid, tables);
+  draftCache.clear();
+  saveStore();
+}
+
+// 上传的 CSV 表存储：source_id → table 名 → 解析结果
+const csvTables = new Map<string, Map<string, ParsedTable>>();
+const tableOf = (sourceId: string, table: string) => csvTables.get(sourceId)?.get(table);
+
+// 种子数据：本地 CSV 目录，唯一的表就是真实文件 orders.csv 的解析结果
+const seedOrders = parseCsvText(ordersCsvRaw);
+const seedSources: DataSourceInfo[] = [
+  {
+    id: 'csv_local', name: '本地 CSV 目录', kind: 'csv',
+    detail: `csv_local · 工作区文件（${seedOrders.rows.length} 行 × ${seedOrders.columns.length} 列）`,
+    tables: ['orders.csv'],
+  },
+];
+const seedDatasetsStored: Array<DatasetInfo & { table?: string; sample_rows?: Array<Record<string, unknown>> }> = [
   {
     id: 'ds_sales', name: '销售明细', source_ref: 'csv_local', source_name: '本地 CSV 目录',
-    field_count: 7, table: 'sales.csv', updated_at: '2026-09-05T00:00:00Z',
-    fields: [
-      { key: 'region', type: 'string', label: '大区', sort_key: 'region_order' },
-      { key: 'city', type: 'string', label: '城市' },
-      { key: 'channel', type: 'string', label: '渠道' },
-      { key: 'amount', type: 'number', label: '销售额' },
-      { key: 'qty', type: 'number', label: '件数' },
-      { key: 'cost', type: 'number', label: '成本' },
-      { key: 'order_date', type: 'date', label: '下单日期' },
-    ],
-  },
-  {
-    id: 'ds_employees', name: '员工花名册', source_ref: 'csv_local', source_name: '本地 CSV 目录',
-    field_count: 4, table: 'employees.csv', updated_at: '2026-09-04T00:00:00Z',
-    fields: [
-      { key: 'dept', type: 'string', label: '部门' },
-      { key: 'grade', type: 'string', label: '职级' },
-      { key: 'headcount', type: 'number', label: '人数' },
-      { key: 'salary', type: 'number', label: '薪资' },
-    ],
+    field_count: seedOrders.fields.length, table: 'orders.csv', updated_at: '2026-09-10T00:00:00Z',
+    fields: seedOrders.fields,
+    sample_rows: seedOrders.rows.slice(0, 10),
   },
 ];
 
-const dbDatasets: Array<DatasetInfo & { table?: string; sample_rows?: Array<Record<string, unknown>> }> = [
-  ...seedDatasets.map((d) => ({ ...d, sample_rows: d.id === 'ds_sales' ? sampleOrders(8) : undefined })),
-];
+function initTables(): Map<string, Map<string, ParsedTable>> {
+  const m = new Map<string, Map<string, ParsedTable>>();
+  m.set('csv_local', new Map([['orders.csv', seedOrders]]));
+  return m;
+}
+
+const storeData = loadStore();
+const dbSources: DataSourceInfo[] = storeData ? storeData.sources : [...seedSources];
+const dbDatasets: Array<DatasetInfo & { table?: string; sample_rows?: Array<Record<string, unknown>> }> =
+  storeData ? storeData.datasets : seedDatasetsStored;
+for (const [sid, tables] of Object.entries(storeData?.tables ?? initTables())) {
+  csvTables.set(sid, new Map(Object.entries(tables)));
+}
+if (!storeData) saveStore();
+
+export const mockDataSources: DataSourceInfo[] = [...dbSources];
 
 export const mockDatasets: DatasetInfo[] = dbDatasets.map(({ id, name, source_ref, source_name, field_count, fields, updated_at }) => ({
   id, name, source_ref, source_name, field_count, fields, updated_at,
@@ -209,103 +269,105 @@ const blankDraftPayload = {
 
 const draftFor = (id: string) => (id !== 'rpt_sales' ? { ...blankDraftPayload, id } : defaultDraftPayload);
 
-// 动态预览生成的取值域（演示数据）
-const DIM_VALUES: Record<string, string[]> = {
-  region: ['华东', '华北'],
-  city: ['上海', '杭州'],
-  channel: ['线上', '门店'],
+/**
+ * 预览渲染统一入口：数据集必须绑定真实上传的 CSV 表，
+ * 用真实行分组聚合（detail 明细 + 小计/总计）；无表或空集时返回空画布。
+ */
+const SCHEMA_STYLES: RenderSchema['styles'] = {
+  s1: { BorderTop: 'thin', BorderRight: 'thin', BorderBottom: 'thin', BorderLeft: 'thin', Fill: '#D9E2F3', FontColor: '#1F2937', Bold: true, RowHeight: 24, Indent: 0 },
+  s2: { BorderTop: 'hair', BorderRight: 'hair', BorderBottom: 'hair', BorderLeft: 'hair', Fill: '#F5F7FA', FontColor: '#1F2937', Bold: false, RowHeight: 20, Indent: 0 },
+  s3: { BorderTop: 'hair', BorderRight: 'hair', BorderBottom: 'medium', BorderLeft: 'hair', Fill: '#E8EEF7', FontColor: '#1F2937', Bold: true, RowHeight: 22, Indent: 0 },
 };
 
-function cartesian(perDim: string[][]): string[][] {
-  let acc: string[][] = [[]];
-  for (const vals of perDim) {
-    acc = acc.flatMap((prefix) => vals.map((v) => [...prefix, v]));
-  }
-  return acc;
-}
-
-/**
- * 按草稿配置（dimensions/metrics/dataset）动态生成 RenderSchema。
- * 仅演示用途：每个维度取 <=2 个取值、每个组合 2 条明细，并生成小计/总计与维度列合并。
- */
 function buildMockSchema(payload: Partial<typeof defaultDraftPayload>): RenderSchema {
   const dims = payload.dimensions ?? [];
   const metrics = payload.metrics ?? [];
-  // 未选数据集/未配置维度与指标：返回空 schema，预览区由前端给出指引
-  if (dims.length === 0 && metrics.length === 0) {
-    return {
-      schema_version: 1,
-      report: { id: payload.id ?? 'rpt_new', def_version: payload.version ?? 2, row_total: 1 },
-      cols: [],
-      styles: {},
-      merges: [],
-      rows: [{ idx: 1, type: 'header', cells: [] }],
-      page_setup: { orientation: 'landscape', fit_to_width: 1, repeat_header_rows: 1 },
-      conditional_formats: [],
-    };
-  }
-  const ds = dbDatasets.find((d) => d.id === (payload.dataset as { id?: string } | undefined)?.id) ?? dbDatasets[0];
-  const fieldOf = (key: string) => ds.fields.find((f) => f.key === key);
+  const emptySchema: RenderSchema = {
+    schema_version: 1,
+    report: { id: payload.id ?? 'rpt_new', def_version: payload.version ?? 2, row_total: 1 },
+    cols: [],
+    styles: {},
+    merges: [],
+    rows: [{ idx: 1, type: 'header', cells: [] }],
+    page_setup: { orientation: 'landscape', fit_to_width: 1, repeat_header_rows: 1 },
+    conditional_formats: [],
+  };
+  if (dims.length === 0 && metrics.length === 0) return emptySchema;
+  const ds = dbDatasets.find((d) => d.id === (payload.dataset as { id?: string } | undefined)?.id);
+  const parsed = ds ? tableOf(ds.source_ref, ds.table ?? '') : undefined;
+  // 只允许基于真实行的聚合渲染：表缺失或为空时给空画布，绝不生成演示假数据
+  if (!parsed || parsed.rows.length === 0) return emptySchema;
+  return buildFromRealRows(payload, parsed);
+}
 
-  const perDim: string[][] = dims.map((d) => DIM_VALUES[d.field] ?? [`${d.field}A`, `${d.field}B`]);
-  const combos = cartesian(perDim).slice(0, 4);
+/** 真实 CSV 行 → 分组报表：detail 明细直出 + 按组小计 + 总计（指标按 SUM 聚合） */
+function buildFromRealRows(payload: Partial<typeof defaultDraftPayload>, parsed: ParsedTable): RenderSchema {
+  const dims = payload.dimensions ?? [];
+  const metrics = payload.metrics ?? [];
+  const labelOf = (f: string) => parsed.fields.find((x) => x.key === f)?.label ?? f;
 
   const meta: RenderSchema['cols'] = [
     ...dims.map((d, i) => ({
-      idx: i, role: 'dimension' as const, label: (fieldOf(d.field)?.label ?? d.label) || d.field,
+      idx: i, role: 'dimension' as const, label: labelOf(d.field),
       width: 96, align: 'left' as const,
     })),
     ...metrics.map((m, i) => ({
-      idx: dims.length + i, role: 'metric' as const, label: m.label || m.field,
+      idx: dims.length + i, role: 'metric' as const, label: labelOf(m.field),
       width: 120, align: 'right' as const, num_fmt: m.num_fmt_ref === 'money' ? '#,##0.00' : '#,##0', metric: m.field,
     })),
   ];
+
+  // 按全维度组合键分组（保序）
+  const groupKey = (r: Record<string, unknown>) => dims.map((d) => String(r[d.field] ?? '')).join('\u0001');
+  const groups = new Map<string, Array<Record<string, unknown>>>();
+  const order: string[] = [];
+  for (const r of parsed.rows) {
+    const k = groupKey(r);
+    if (!groups.has(k)) { groups.set(k, []); order.push(k); }
+    groups.get(k)!.push(r);
+  }
+  const showKeys = order.slice(0, 8);
 
   let idx = 1;
   const rows: RowDTO[] = [
     { idx: idx++, type: 'header', cells: meta.map((c) => ({ col: c.idx, cell_id: `r1c${c.idx}`, value: c.label, display: c.label, style: 's1' })) },
   ];
-  // 记录每个维度列的组合区间，用于生成合并
-  const runByCol: Array<{ value: string; from: number; to: number; col0: number }[]> = dims.map(() => []);
-  const pushRun = (col0: number, value: string, rowIdx: number) => {
-    const run = runByCol[col0];
-    const last = run[run.length - 1];
-    if (last && last.value === value) last.to = rowIdx;
-    else run.push({ value, from: rowIdx, to: rowIdx, col0 });
-  };
+  let total = metrics.map(() => 0);
+  let rowCountForCF = 0;
 
-  for (const combo of combos.map((c) => [...c])) {
-    const seg: number[] = [];
-    for (let j = 0; j < 2; j++) {
+  for (const k of showKeys) {
+    const group = groups.get(k)!;
+    const combo = k.split('\u0001');
+    const gt = metrics.map(() => 0);
+    let seqInGroup = 0;
+    for (const r of group.slice(0, 4)) {
+      seqInGroup += 1;
+      rowCountForCF += 1;
       const rIdx = idx++;
-      seg.push(rIdx);
       const cells = meta.map((c) => {
         if (c.role === 'dimension') {
-          const v = combo[c.idx];
-          pushRun(c.idx, v, rIdx);
-          return { col: c.idx, cell_id: `r${rIdx}c${c.idx}`, value: v, display: v, style: 's2' };
+          const v = String(r[dims[c.idx].field] ?? '');
+          return { col: c.idx, cell_id: `r${rIdx}c${c.idx}`, value: v, display: v, style: 's1' === c.label ? 's1' : 's2' };
         }
-        const v = 100 * (c.idx + 1) + (rIdx % 3) * 50;
+        const v = Number(r[c.metric ?? '']) || 0;
+        gt[metrics.findIndex((m) => m.field === c.metric)] += v;
         return { col: c.idx, cell_id: `r${rIdx}c${c.idx}`, value: v, display: String(v), style: 's2' };
       });
-      rows.push({ idx: rIdx, type: 'detail' as const, group_path: combo, seq: j + 1, cells });
+      rows.push({ idx: rIdx, type: 'detail' as const, group_path: combo, seq: seqInGroup, cells });
     }
     const rIdx = idx++;
-    seg.push(rIdx);
-    pushRun(dims.length - 1, combo[dims.length - 1], rIdx);
+    rowCountForCF += 1;
     const cells = meta.map((c) => {
       if (c.role === 'dimension') {
-        const v = combo[c.idx];
-        const last = runByCol[c.idx][runByCol[c.idx].length - 1];
-        last.to = rIdx;
-        // 小计行只保留最内层维度值，外层留空（便于 S2 省略键判定）
-        const show = c.idx === dims.length - 1 ? v : '';
-        return { col: c.idx, cell_id: `r${rIdx}c${c.idx}`, value: show, display: show, style: 's3' };
+        const v = c.idx === dims.length - 1 ? String(combo[c.idx] ?? '') : '';
+        return { col: c.idx, cell_id: `r${rIdx}c${c.idx}`, value: v, display: v, style: 's3' };
       }
-      const v = 100 * (c.idx + 1) * 2;
+      const vi = metrics.findIndex((m) => m.field === c.metric);
+      const v = gt[vi];
       return { col: c.idx, cell_id: `r${rIdx}c${c.idx}`, value: v, display: String(v), style: 's3' };
     });
     rows.push({ idx: rIdx, type: 'subtotal' as const, group_path: combo, cells });
+    gt.forEach((v, i) => { total[i] += v; });
   }
 
   const rIdx = idx++;
@@ -314,33 +376,33 @@ function buildMockSchema(payload: Partial<typeof defaultDraftPayload>): RenderSc
       const v = c.idx === 0 ? '总计' : '';
       return { col: c.idx, cell_id: `r${rIdx}c${c.idx}`, value: v, display: v, style: 's3' };
     }
-    const v = 400 * (c.idx + 1);
+    const v = total[metrics.findIndex((m) => m.field === c.metric)] ?? 0;
     return { col: c.idx, cell_id: `r${rIdx}c${c.idx}`, value: v, display: String(v), style: 's3' };
   });
   rows.push({ idx: rIdx, type: 'total' as const, cells: totalCells });
 
-  // 维度列跨组合合并（与 transform.buildDimMerges 配合，语义为列合并而非物理格合并）
-  const merges: MergeInfo[] = runByCol.flatMap((runs) =>
-    runs.filter((run) => run.from < run.to).map((run) => ({ r1: run.from, r2: run.to, c: run.col0 + 1 })),
-  );
+  // 条件格式的数据条以真实指标最大值为上界
+  const cfMax = metrics.reduce((acc, m) => Math.max(acc,
+    parsed.rows.reduce((a, r) => Math.max(a, Number(r[m.field]) || 0), 0)), 1);
 
   return {
     schema_version: 1,
     report: { id: payload.id ?? 'rpt_sales', def_version: payload.version ?? 2, row_total: rows.length },
     cols: meta,
-    styles: {
-      s1: { BorderTop: 'thin', BorderRight: 'thin', BorderBottom: 'thin', BorderLeft: 'thin', Fill: '#D9E2F3', FontColor: '#1F2937', Bold: true, RowHeight: 24, Indent: 0 },
-      s2: { BorderTop: 'hair', BorderRight: 'hair', BorderBottom: 'hair', BorderLeft: 'hair', Fill: '#F5F7FA', FontColor: '#1F2937', Bold: false, RowHeight: 20, Indent: 0 },
-      s3: { BorderTop: 'hair', BorderRight: 'hair', BorderBottom: 'medium', BorderLeft: 'hair', Fill: '#E8EEF7', FontColor: '#1F2937', Bold: true, RowHeight: 22, Indent: 0 },
-    },
-    merges,
+    styles: SCHEMA_STYLES,
+    merges: [],
     rows,
     page_setup: { orientation: 'landscape', fit_to_width: 1, repeat_header_rows: 1 },
     conditional_formats: metrics[0]
-      ? [{ id: 'cf_amount', kind: 'data_bar' as const, color: '#638EC6', ranges: [`C2:C${rows.length}`], stats: { min: 0, max: 800 } }]
+      ? [{ id: 'cf_amount', kind: 'data_bar' as const, color: '#638EC6', ranges: [`C2:C${rowCountForCF + 1}`], stats: { min: 0, max: cfMax } }]
       : [],
   };
 }
+
+/**
+ * 演示数据兜底已删除：平台任何报表预览只来自真实上传并解析的 CSV 行。
+ * 数据管理页创建数据源/数据集时未提供真实文件内容将返回 400。
+ */
 
 // ---------------------------------------------------------------------------
 // handlers — 全部挂在 '*/v1/...' 下
@@ -353,38 +415,70 @@ export const handlers = [
   ),
 
   http.post('*/v1/datasources', async ({ request }) => {
-    const body = await request.json().catch(() => ({})) as { name?: string; kind?: string };
-    const name = body.name?.trim() || '未命名数据源';
-    const slug = `ds_${Date.now().toString(36)}`;
+    const body = await request.json().catch(() => ({})) as { name?: string; file_name?: string; content?: string };
+    const name = (body.name ?? '').trim() || '未命名数据源';
+    const fileName = body.file_name ?? 'data.csv';
+    const content = body.content ?? '';
+    if (!content.trim()) return HttpResponse.json({ error: 'CSV 内容为空' }, { status: 400 });
+    const parsed = parseCsvText(content);
     const source: DataSourceInfo = {
-      id: slug,
+      id: `ds_${Date.now().toString(36)}`,
       name,
       kind: 'csv',
-      detail: `csv_local · 自动生成订单明细（模拟读取 ${ORDERS_TABLE}）`,
-      tables: [ORDERS_TABLE],
+      detail: `csv_local · ${parsed.rows.length} 行 × ${parsed.columns.length} 列（${fileName}）`,
+      tables: [fileName],
     };
+    csvTables.set(source.id, new Map([[fileName, parsed]]));
     dbSources.push(source);
+    saveStore();
     return HttpResponse.json(source, { status: 201 });
+  }),
+
+  http.post('*/v1/datasources/:id/tables', async ({ request, params }) => {
+    const source = dbSources.find((s) => s.id === params.id);
+    if (!source) return HttpResponse.json({ error: 'datasource not found' }, { status: 404 });
+    const body = await request.json().catch(() => ({})) as { file_name?: string; content?: string };
+    const fileName = body.file_name ?? 'data.csv';
+    const content = body.content ?? '';
+    if (!content.trim()) return HttpResponse.json({ error: 'CSV 内容为空' }, { status: 400 });
+    const parsed = parseCsvText(content);
+    const tables = csvTables.get(source.id) ?? new Map<string, ParsedTable>();
+    tables.set(fileName, parsed);
+    csvTables.set(source.id, tables);
+    if (!source.tables?.includes(fileName)) source.tables = [...(source.tables ?? []), fileName];
+    saveStore();
+    return HttpResponse.json({ ok: `table ${fileName} uploaded`, tables: source.tables });
   }),
 
   http.delete('*/v1/datasources/:id', ({ params }) => {
     const idx = dbSources.findIndex((s) => s.id === params.id);
     if (idx < 0) return HttpResponse.json({ error: 'datasource not found' }, { status: 404 });
-    dbSources.splice(idx, 1);
+    const [removed] = dbSources.splice(idx, 1);
+    csvTables.delete(removed.id);
+    saveStore();
     return HttpResponse.json({ ok: 'deleted' });
   }),
 
   http.get('*/v1/datasets', () =>
-    HttpResponse.json(dbDatasets.map(({ id, name, source_ref, source_name, field_count, fields, updated_at }) => ({
+    HttpResponse.json(dbDatasets.map(({ id, name, source_ref, source_name, field_count, fields, updated_at, sample_rows }) => ({
       id, name, source_ref, source_name, field_count, fields, updated_at,
+      row_count: sample_rows?.length ?? 0,
     }))),
   ),
 
   http.post('*/v1/datasets', async ({ request }) => {
-    const body = await request.json().catch(() => ({})) as { name?: string; source_ref?: string; record_count?: number };
+    const body = await request.json().catch(() => ({})) as { name?: string; source_ref?: string; table?: string };
     const name = body.name?.trim() || '新数据集';
-    const source = dbSources.find((s) => s.id === body.source_ref) ?? dbSources[0];
-    const fields = ORDER_FIELDS;
+    const source = dbSources.find((s) => s.id === body.source_ref);
+    if (!source) return HttpResponse.json({ error: '数据源不存在，请先创建数据源并上传 CSV' }, { status: 400 });
+    const table = body.table ?? source.tables?.[0];
+    const parsed = table ? tableOf(source.id, table) : undefined;
+    // 数据集必须绑定真实上传并解析过的 CSV 表，不允许兜底到演示字段
+    if (!parsed || parsed.rows.length === 0) {
+      return HttpResponse.json({ error: `数据源「${source.name}」没有可用的真实表，请先上传 CSV 文件` }, { status: 400 });
+    }
+    const fields = parsed.fields;
+    const sample_rows = parsed.rows.slice(0, 10);
     const dataset: DatasetInfo & { table?: string; sample_rows: Array<Record<string, unknown>> } = {
       id: `set_${Date.now().toString(36)}`,
       name,
@@ -392,11 +486,12 @@ export const handlers = [
       source_name: source.name,
       field_count: fields.length,
       fields,
-      table: ORDERS_TABLE,
+      table,
       updated_at: new Date().toISOString(),
-      sample_rows: sampleOrders(Math.max(6, Math.min(50, body.record_count ?? 12))),
+      sample_rows,
     };
     dbDatasets.push(dataset);
+    saveStore();
     return HttpResponse.json(dataset, { status: 201 });
   }),
 
@@ -404,6 +499,7 @@ export const handlers = [
     const idx = dbDatasets.findIndex((d) => d.id === params.id);
     if (idx < 0) return HttpResponse.json({ error: 'dataset not found' }, { status: 404 });
     dbDatasets.splice(idx, 1);
+    saveStore();
     return HttpResponse.json({ ok: 'deleted' });
   }),
 

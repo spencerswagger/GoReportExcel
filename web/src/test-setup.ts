@@ -1,6 +1,7 @@
 import { cleanup } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll, vi } from 'vitest';
 import { server } from './api/mock-server';
+import { resetMockStore } from './api/mock';
 
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
@@ -11,6 +12,7 @@ Object.defineProperty(window, 'matchMedia', {
 });
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
+beforeEach(() => resetMockStore());
 afterEach(() => { cleanup(); server.resetHandlers(); });
 afterAll(() => server.close());
 
