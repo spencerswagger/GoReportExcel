@@ -1,7 +1,10 @@
-import { useEffect, useState } from 'react';
-import { Alert, Skeleton, Tag, Typography } from 'antd';
+import { useCallback, useEffect, useState } from 'react';
+import { Alert, Button, Form, Input, InputNumber, Modal, Popconfirm, Select, Skeleton, Tag, Typography } from 'antd';
 import { Link } from 'react-router-dom';
-import { fetchDataSources, fetchDatasets } from '../api/client';
+import {
+  createDataSource, createDataset, deleteDataSource, deleteDataset,
+  fetchDataSources, fetchDatasets,
+} from '../api/client';
 import type { DataSourceInfo, DatasetInfo } from '../api/types';
 
 const typeColor: Record<DataSourceInfo['kind'], string> = {
@@ -21,20 +24,53 @@ export default function Datasets() {
   const [sources, setSources] = useState<DataSourceInfo[] | null>(null);
   const [datasets, setDatasets] = useState<DatasetInfo[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [srcModal, setSrcModal] = useState(false);
+  const [dsModal, setDsModal] = useState(false);
+  const [srcForm] = Form.useForm();
+  const [dsForm] = Form.useForm();
 
-  useEffect(() => {
+  const load = useCallback(() => {
     let cancelled = false;
     Promise.all([fetchDataSources(), fetchDatasets()])
       .then(([s, d]) => {
         if (cancelled) return;
         setSources(s);
         setDatasets(d);
+        setErr(null);
       })
       .catch((e) => {
         if (!cancelled) setErr(e instanceof Error ? e.message : '加载失败');
       });
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => load(), [load]);
+
+  const onCreateSource = async () => {
+    const { name } = await srcForm.validateFields();
+    await createDataSource({ name, kind: 'csv' });
+    setSrcModal(false);
+    srcForm.resetFields();
+    load();
+  };
+
+  const onCreateDataset = async () => {
+    const { name, source_ref, record_count } = await dsForm.validateFields();
+    await createDataset({ name, source_ref, record_count });
+    setDsModal(false);
+    dsForm.resetFields();
+    load();
+  };
+
+  const onDeleteSource = async (id: string) => {
+    await deleteDataSource(id);
+    load();
+  };
+
+  const onDeleteDataset = async (id: string) => {
+    await deleteDataset(id);
+    load();
+  };
 
   const loading = sources === null && datasets === null;
 
@@ -54,16 +90,22 @@ export default function Datasets() {
         </Link>
       </div>
 
-      {err && <Alert type="error" showIcon message="加载失败" description={err} />}
+      {err && <Alert type="error" showIcon message="操作失败" description={err} closable onClose={() => setErr(null)} />}
 
       {loading && <Skeleton active paragraph={{ rows: 4 }} />}
 
       {sources && (
         <>
           <div>
-            <Typography.Title level={4} style={{ margin: '0 0 10px', fontFamily: "'Noto Serif SC', serif", color: 'var(--ink)' }}>
-              数据源
-            </Typography.Title>
+            <div style={{ display: 'flex', alignItems: 'center', margin: '0 0 10px' }}>
+              <Typography.Title level={4} style={{ margin: 0, fontFamily: "'Noto Serif SC', serif", color: 'var(--ink)' }}>
+                数据源
+              </Typography.Title>
+              <Button size="small" type="primary" ghost style={{ marginLeft: 'auto', borderColor: 'var(--accent)', color: 'var(--accent-ink)' }}
+                onClick={() => setSrcModal(true)}>
+                ＋ 新建数据源
+              </Button>
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
               {sources.map((s) => (
                 <article key={s.id} className="ate-report-card" style={{
@@ -76,6 +118,9 @@ export default function Datasets() {
                     <Tag style={{ marginLeft: 'auto', background: typeColor[s.kind], color: 'var(--ink)', border: 'none' }}>
                       {s.kind.toUpperCase()}
                     </Tag>
+                    <Popconfirm title="删除该数据源？" okText="删除" cancelText="取消" onConfirm={() => onDeleteSource(s.id)}>
+                      <Button type="text" size="small" aria-label={`删除数据源 ${s.name}`} style={{ color: 'var(--ink-faint)' }}>×</Button>
+                    </Popconfirm>
                   </div>
                   <div style={{ fontSize: 11.5, color: 'var(--ink-faint)', fontFamily: "'IBM Plex Mono', monospace", margin: '8px 0 10px' }}>{s.detail}</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -87,9 +132,15 @@ export default function Datasets() {
           </div>
 
           <div>
-            <Typography.Title level={4} style={{ margin: '8px 0 10px', fontFamily: "'Noto Serif SC', serif", color: 'var(--ink)' }}>
-              数据集
-            </Typography.Title>
+            <div style={{ display: 'flex', alignItems: 'center', margin: '8px 0 10px' }}>
+              <Typography.Title level={4} style={{ margin: 0, fontFamily: "'Noto Serif SC', serif", color: 'var(--ink)' }}>
+                数据集
+              </Typography.Title>
+              <Button size="small" type="primary" ghost style={{ marginLeft: 'auto', borderColor: 'var(--accent)', color: 'var(--accent-ink)' }}
+                onClick={() => { dsForm.setFieldValue('record_count', 12); setDsModal(true); }}>
+                ＋ 新建数据集
+              </Button>
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 14 }}>
               {(datasets ?? []).map((d) => (
                 <article key={d.id} className="ate-report-card" style={{
@@ -101,6 +152,9 @@ export default function Datasets() {
                     <span style={{ marginLeft: 'auto', fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: 'var(--ink-faint)' }}>
                       {d.field_count} FIELDS
                     </span>
+                    <Popconfirm title="删除该数据集？" okText="删除" cancelText="取消" onConfirm={() => onDeleteDataset(d.id)}>
+                      <Button type="text" size="small" aria-label={`删除数据集 ${d.name}`} style={{ color: 'var(--ink-faint)' }}>×</Button>
+                    </Popconfirm>
                   </div>
                   <div style={{ fontSize: 11.5, color: 'var(--ink-faint)' }}>
                     来源：{d.source_name ?? d.source_ref} · {d.id}
@@ -118,6 +172,33 @@ export default function Datasets() {
           </div>
         </>
       )}
+
+      {/* 新建数据源 */}
+      <Modal title="新建数据源" open={srcModal} onOk={onCreateSource} onCancel={() => setSrcModal(false)} okText="创建" cancelText="取消" destroyOnClose>
+        <Form form={srcForm} layout="vertical" requiredMark={false} style={{ marginTop: 8 }}>
+          <Form.Item name="name" label="数据源名称" rules={[{ required: true, message: '请输入名称' }]}>
+            <Input placeholder="如：订单 CSV 目录" />
+          </Form.Item>
+          <div className="panel-muted" style={{ lineHeight: 1.8 }}>
+            创建后自动生成模拟订单明细（<span style={{ fontFamily: 'var(--font-mono)' }}>orders.csv</span>，含订单号/大区/城市/渠道/商品/金额/件数等字段），可在下一步基于它创建数据集。
+          </div>
+        </Form>
+      </Modal>
+
+      {/* 新建数据集 */}
+      <Modal title="新建数据集" open={dsModal} onOk={onCreateDataset} onCancel={() => setDsModal(false)} okText="创建" cancelText="取消" destroyOnClose>
+        <Form form={dsForm} layout="vertical" requiredMark={false} style={{ marginTop: 8 }}>
+          <Form.Item name="name" label="数据集名称" rules={[{ required: true, message: '请输入名称' }]}>
+            <Input placeholder="如：2026 年 9 月订单" />
+          </Form.Item>
+          <Form.Item name="source_ref" label="来源数据源" rules={[{ required: true, message: '请选择数据源' }]}>
+            <Select placeholder="选择数据源" options={(sources ?? []).map((s) => ({ value: s.id, label: `${s.name} · ${s.id}` }))} />
+          </Form.Item>
+          <Form.Item name="record_count" label="生成订单记录数">
+            <InputNumber min={6} max={50} style={{ width: '100%' }} />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 }

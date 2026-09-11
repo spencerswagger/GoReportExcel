@@ -81,6 +81,28 @@ export function fetchDatasets() {
   return req<DatasetInfo[]>('/datasets');
 }
 
+export function createDataSource(body: { name: string; kind?: string }) {
+  return req<DataSourceInfo>('/datasources', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteDataSource(id: string) {
+  return req<{ ok: string }>(`/datasources/${id}`, { method: 'DELETE' });
+}
+
+export function createDataset(body: { name: string; source_ref: string; record_count?: number }) {
+  return req<DatasetInfo>('/datasets', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteDataset(id: string) {
+  return req<{ ok: string }>(`/datasets/${id}`, { method: 'DELETE' });
+}
+
 export function submitExport(body: { def_id: string; version?: number; idempotency_key?: string }) {
   return req<ExportSubmitResult>('/export', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },

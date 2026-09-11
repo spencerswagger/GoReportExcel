@@ -1,5 +1,5 @@
 import { http, HttpResponse } from 'msw';
-import type { CellDTO, MergeInfo, RenderSchema, RowDTO } from './types';
+import type { CellDTO, DataSourceInfo, DatasetFieldInfo, DatasetInfo, MergeInfo, RenderSchema, RowDTO } from './types';
 
 // ---------------------------------------------------------------------------
 // fixtureSchema — 单分组报表（2 维度：大区/城市，3 个城市分组，共 11 行）
@@ -89,20 +89,62 @@ export const fixtureSchema: RenderSchema = {
 };
 
 // ---------------------------------------------------------------------------
-// 数据源 / 数据集 fixture（供"数据管理"页与编辑器字段池使用）
+// 数据源 / 数据集（可变内存仓库：支持数据管理页增删改查）
 // ---------------------------------------------------------------------------
 
-export const mockDataSources = [
-  { id: 'ds_csv_local', name: '本地 CSV 目录', kind: 'csv', detail: 'csv_local · 按目录扫描 <table>.csv', tables: ['sales.csv', 'employees.csv'] },
-  { id: 'ds_dw', name: '数据仓库 PgSQL', kind: 'db', detail: 'postgres://dw · 只读账号', tables: ['dw.sales_fact', 'dw.dim_region'] },
-] as const;
+export const mockDataSources: DataSourceInfo[] = [
+  { id: 'csv_local', name: '本地 CSV 目录', kind: 'csv', detail: 'csv_local · 按目录扫描 <table>.csv', tables: ['sales.csv', 'employees.csv'] },
+  { id: 'dw', name: '数据仓库 PgSQL', kind: 'db', detail: 'postgres://dw · 只读账号', tables: ['dw.sales_fact', 'dw.dim_region'] },
+];
 
-export const mockDatasets = [
+/** 订单 CSV 表：新数据源默认携带 orders.csv，字段来自这里的订单定义 */
+const ORDERS_TABLE = 'orders.csv';
+const ORDER_FIELDS: DatasetFieldInfo[] = [
+  { key: 'order_id', type: 'string', label: '订单号' },
+  { key: 'order_date', type: 'date', label: '下单日期' },
+  { key: 'region', type: 'string', label: '大区', sort_key: 'region_order' },
+  { key: 'city', type: 'string', label: '城市' },
+  { key: 'channel', type: 'string', label: '渠道' },
+  { key: 'customer', type: 'string', label: '客户' },
+  { key: 'product', type: 'string', label: '商品' },
+  { key: 'amount', type: 'number', label: '金额' },
+  { key: 'qty', type: 'number', label: '件数' },
+];
+
+const REGIONS = ['华东', '华北', '华南'];
+const CITIES: Record<string, string[]> = { 华东: ['上海', '杭州', '南京'], 华北: ['北京', '天津'], 华南: ['广州', '深圳'] };
+const CHANNELS = ['线上', '门店'];
+const PRODUCTS = ['iPhone 15', 'MacBook Air', 'iPad Pro', 'AirPods Pro', 'Apple Watch'];
+
+/** 生成订单记录（演示数据，模拟读取 orders.csv） */
+function sampleOrders(n: number): Array<Record<string, unknown>> {
+  const rows: Array<Record<string, unknown>> = [];
+  for (let i = 1; i <= n; i++) {
+    const region = REGIONS[i % REGIONS.length];
+    const city = CITIES[region][i % CITIES[region].length];
+    const date = new Date(Date.UTC(2026, 5 + (i % 3), (i * 7) % 28 + 1));
+    rows.push({
+      order_id: `SO-202609-${String(i).padStart(4, '0')}`,
+      order_date: date.toISOString().slice(0, 10),
+      region, city,
+      channel: CHANNELS[i % CHANNELS.length],
+      customer: `客户${String.fromCharCode(65 + (i % 8))}`,
+      product: PRODUCTS[i % PRODUCTS.length],
+      amount: [980, 1299, 799, 199, 399][i % 5] + (i % 3) * 100,
+      qty: (i % 4) + 1,
+    });
+  }
+  return rows;
+}
+
+// 数据管理页 CRUD 的内存态（HMR/刷新后重置，演示用）
+const dbSources: DataSourceInfo[] = [...mockDataSources];
+
+// 种子数据集（初始化 dbDatasets 用；mockDatasets 由 dbDatasets 派生，供编辑器字段池等复用）
+const seedDatasets: Array<DatasetInfo & { table?: string }> = [
   {
-    id: 'ds_sales',
-    name: '销售明细',
-    source_ref: 'csv_local',
-    source_name: '本地 CSV 目录',
+    id: 'ds_sales', name: '销售明细', source_ref: 'csv_local', source_name: '本地 CSV 目录',
+    field_count: 7, table: 'sales.csv', updated_at: '2026-09-05T00:00:00Z',
     fields: [
       { key: 'region', type: 'string', label: '大区', sort_key: 'region_order' },
       { key: 'city', type: 'string', label: '城市' },
@@ -112,22 +154,26 @@ export const mockDatasets = [
       { key: 'cost', type: 'number', label: '成本' },
       { key: 'order_date', type: 'date', label: '下单日期' },
     ],
-    updated_at: '2026-09-05T00:00:00Z',
   },
   {
-    id: 'ds_employees',
-    name: '员工花名册',
-    source_ref: 'csv_local',
-    source_name: '本地 CSV 目录',
+    id: 'ds_employees', name: '员工花名册', source_ref: 'csv_local', source_name: '本地 CSV 目录',
+    field_count: 4, table: 'employees.csv', updated_at: '2026-09-04T00:00:00Z',
     fields: [
       { key: 'dept', type: 'string', label: '部门' },
       { key: 'grade', type: 'string', label: '职级' },
       { key: 'headcount', type: 'number', label: '人数' },
       { key: 'salary', type: 'number', label: '薪资' },
     ],
-    updated_at: '2026-09-04T00:00:00Z',
   },
 ];
+
+const dbDatasets: Array<DatasetInfo & { table?: string; sample_rows?: Array<Record<string, unknown>> }> = [
+  ...seedDatasets.map((d) => ({ ...d, sample_rows: d.id === 'ds_sales' ? sampleOrders(8) : undefined })),
+];
+
+export const mockDatasets: DatasetInfo[] = dbDatasets.map(({ id, name, source_ref, source_name, field_count, fields, updated_at }) => ({
+  id, name, source_ref, source_name, field_count, fields, updated_at,
+}));
 
 /** 编辑器演示草稿的默认数据集描述（与 panels.test 的 seededDraft 结构一致） */
 const defaultDataset = {
@@ -198,7 +244,7 @@ function buildMockSchema(payload: Partial<typeof defaultDraftPayload>): RenderSc
       conditional_formats: [],
     };
   }
-  const ds = mockDatasets.find((d) => d.id === (payload.dataset as { id?: string } | undefined)?.id) ?? mockDatasets[0];
+  const ds = dbDatasets.find((d) => d.id === (payload.dataset as { id?: string } | undefined)?.id) ?? dbDatasets[0];
   const fieldOf = (key: string) => ds.fields.find((f) => f.key === key);
 
   const perDim: string[][] = dims.map((d) => DIM_VALUES[d.field] ?? [`${d.field}A`, `${d.field}B`]);
@@ -303,18 +349,66 @@ function buildMockSchema(payload: Partial<typeof defaultDraftPayload>): RenderSc
 
 export const handlers = [
   http.get('*/v1/datasources', () =>
-    HttpResponse.json(mockDataSources),
+    HttpResponse.json(dbSources),
   ),
 
+  http.post('*/v1/datasources', async ({ request }) => {
+    const body = await request.json().catch(() => ({})) as { name?: string; kind?: string };
+    const name = body.name?.trim() || '未命名数据源';
+    const slug = `ds_${Date.now().toString(36)}`;
+    const source: DataSourceInfo = {
+      id: slug,
+      name,
+      kind: 'csv',
+      detail: `csv_local · 自动生成订单明细（模拟读取 ${ORDERS_TABLE}）`,
+      tables: [ORDERS_TABLE],
+    };
+    dbSources.push(source);
+    return HttpResponse.json(source, { status: 201 });
+  }),
+
+  http.delete('*/v1/datasources/:id', ({ params }) => {
+    const idx = dbSources.findIndex((s) => s.id === params.id);
+    if (idx < 0) return HttpResponse.json({ error: 'datasource not found' }, { status: 404 });
+    dbSources.splice(idx, 1);
+    return HttpResponse.json({ ok: 'deleted' });
+  }),
+
   http.get('*/v1/datasets', () =>
-    HttpResponse.json(mockDatasets.map((d) => ({
-      id: d.id, name: d.name, source_ref: d.source_ref, source_name: d.source_name,
-      field_count: d.fields.length, fields: d.fields, updated_at: d.updated_at,
+    HttpResponse.json(dbDatasets.map(({ id, name, source_ref, source_name, field_count, fields, updated_at }) => ({
+      id, name, source_ref, source_name, field_count, fields, updated_at,
     }))),
   ),
 
+  http.post('*/v1/datasets', async ({ request }) => {
+    const body = await request.json().catch(() => ({})) as { name?: string; source_ref?: string; record_count?: number };
+    const name = body.name?.trim() || '新数据集';
+    const source = dbSources.find((s) => s.id === body.source_ref) ?? dbSources[0];
+    const fields = ORDER_FIELDS;
+    const dataset: DatasetInfo & { table?: string; sample_rows: Array<Record<string, unknown>> } = {
+      id: `set_${Date.now().toString(36)}`,
+      name,
+      source_ref: source.id,
+      source_name: source.name,
+      field_count: fields.length,
+      fields,
+      table: ORDERS_TABLE,
+      updated_at: new Date().toISOString(),
+      sample_rows: sampleOrders(Math.max(6, Math.min(50, body.record_count ?? 12))),
+    };
+    dbDatasets.push(dataset);
+    return HttpResponse.json(dataset, { status: 201 });
+  }),
+
+  http.delete('*/v1/datasets/:id', ({ params }) => {
+    const idx = dbDatasets.findIndex((d) => d.id === params.id);
+    if (idx < 0) return HttpResponse.json({ error: 'dataset not found' }, { status: 404 });
+    dbDatasets.splice(idx, 1);
+    return HttpResponse.json({ ok: 'deleted' });
+  }),
+
   http.get('*/v1/datasets/:datasetId', ({ params }) => {
-    const ds = mockDatasets.find((d) => d.id === params.datasetId);
+    const ds = dbDatasets.find((d) => d.id === params.datasetId);
     if (!ds) return HttpResponse.json({ error: 'dataset not found' }, { status: 404 });
     return HttpResponse.json(ds);
   }),
