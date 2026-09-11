@@ -80,6 +80,10 @@ export default function PreviewSheet({ schema, hierarchyType = 'grid', zoom = 1,
   const handleMounted = (instance: object): void => {
     setCellStyleLookup(instance, lookup);
     s2Ref.current = instance;
+    // 暴露实例供浏览器端自动化验证单元格渲染内容（调试/QA 用）
+    if (typeof window !== 'undefined') {
+      (window as unknown as { __previewS2?: object }).__previewS2 = instance;
+    }
   };
 
   // 选中变化 → 按实例传导并轻量重绘，使数据格选中高亮（金色描边）即时显现

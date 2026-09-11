@@ -99,7 +99,7 @@ export function MetricsPanel() {
           key={v}
           aria-label={`指标名 ${r.field}`}
           defaultValue={v}
-          style={{ width: 108 }}
+          style={{ width: 68 }}
           onBlur={(e) => { if (e.target.value !== r.label) patchMetric(r.field, { label: e.target.value }); }}
         />
       ),
@@ -107,18 +107,24 @@ export function MetricsPanel() {
     {
       title: '字段',
       dataIndex: 'field',
-      render: (v: string) => <span className="mono" style={{ fontSize: 12, color: 'var(--ink-dim)' }}>{v}</span>,
+      render: (v: string) => (
+        <span
+          className="mono"
+          title={v}
+          style={{ fontSize: 11.5, color: 'var(--ink-dim)', display: 'inline-block', maxWidth: 72, overflow: 'hidden', textOverflow: 'ellipsis', verticalAlign: 'middle' }}
+        >{v}</span>
+      ),
     },
     {
       title: '聚合',
       dataIndex: 'agg',
-      width: 132,
+      width: 112,
       render: (v: string, r) => (
         <Select
           size="small"
           aria-label={`聚合方式 ${r.field}`}
           value={v}
-          style={{ width: 128 }}
+          style={{ width: 108 }}
           options={AGG_OPTIONS}
           onChange={(agg) => patchMetric(r.field, { agg })}
         />
@@ -126,7 +132,7 @@ export function MetricsPanel() {
     },
     {
       title: '操作',
-      width: 96,
+      width: 76,
       render: (_, r, i) => (
         <span style={{ display: 'inline-flex', gap: 2 }}>
           <Tooltip title="上移">

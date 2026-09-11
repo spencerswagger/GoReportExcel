@@ -22,6 +22,35 @@ test('download endpoint returns real xlsx workbook (not SPA fallback)', async ()
   expect(buf.subarray(0, 2).toString()).toBe('PK');
 });
 
+test('POST download 按当前 payload 生成：多维度导出为多列 Excel', async () => {
+  const payload = {
+    id: 'rpt_new', version: 2, name: '新建报表',
+    dataset: { id: 'ds_sales', source_ref: 'csv_local', fields: [] },
+    dimensions: [
+      { field: 'region', label: '大区', axis: 'row', sort: { by: 'sort_key', dir: 'asc' } },
+      { field: 'city', label: '城市', axis: 'row', sort: { by: 'sort_key', dir: 'asc' } },
+    ],
+    metrics: [{ field: 'amount', label: '销售额', agg: 'SUM', num_fmt_ref: 'money' }],
+  };
+  const res = await fetch('/v1/export/task-1/download', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ def_id: 'rpt_new', payload }),
+  });
+  expect(res.ok).toBe(true);
+  const ExcelJS = await import('exceljs');
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(await res.arrayBuffer());
+  const ws = wb.worksheets[0];
+  // 表头同时包含两个维度与指标
+  const header = (ws.getRow(1).values as string[]).filter(Boolean).join(',');
+  expect(header).toContain('大区');
+  expect(header).toContain('城市');
+  expect(header).toContain('销售额');
+  // 存在明细数据行
+  expect(ws.actualRowCount).toBeGreaterThan(2);
+});
+
 test('failure path: submit export 500 shows error alert', async () => {
   server.use(
     http.post('*/v1/export', () =>

@@ -1,17 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Progress } from 'antd';
-import { exportDownloadUrl, exportStatus, submitExport } from '../api/client';
-
-/** 从 Content-Disposition 解析下载文件名：优先 filename*=UTF-8''（中文名），回退 filename */
-function fileNameFromDisposition(header: string | null): string {
-  if (!header) return 'report.xlsx';
-  const star = header.match(/filename\*=(?:UTF-8'')?([^;]+)/i);
-  if (star) {
-    try { return decodeURIComponent(star[1].trim()); } catch { /* 非法编码时回退 */ }
-  }
-  const plain = header.match(/filename="?([^";]+)"?/i);
-  return plain?.[1] ?? 'report.xlsx';
-}
+import { exportDownload, exportStatus, submitExport } from '../api/client';
+import { useEditorStore } from '../store/editor';
 
 export function ExportButton({ defId }: { defId: string }) {
   const [taskId, setTaskId] = useState<string | null>(null);
@@ -83,19 +73,15 @@ export function ExportButton({ defId }: { defId: string }) {
 
   const failed = state === 'failed' || err != null;
 
-  // 用 fetch 拉取导出文件并触发浏览器下载：MSW/真实后端都可拦截，避免 <a target="_blank">
-  // 在新标签页导航被 SPA 路由兜底导致"点了没反应"。
+  // 用 POST 携带当前草稿 payload 生成并触发浏览器下载：导出配置与编辑器完全一致（多维度/聚合即时生效）
   const download = async (tid: string) => {
     setErr(null);
     try {
-      const res = await fetch(exportDownloadUrl(tid, defId));
-      if (!res.ok) throw new Error(`下载失败 ${res.status}`);
-      const name = fileNameFromDisposition(res.headers.get('Content-Disposition'));
-      const blob = await res.blob();
+      const { blob, filename } = await exportDownload(defId, tid, useEditorStore.getState().draft);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = name;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();

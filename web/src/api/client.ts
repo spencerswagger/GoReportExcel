@@ -128,3 +128,30 @@ export function exportStatus(taskId: string) {
 export function exportDownloadUrl(taskId: string, defId?: string) {
   return `${BASE}/export/${taskId}/download${defId ? `?def_id=${encodeURIComponent(defId)}` : ''}`;
 }
+
+/** 从 Content-Disposition 解析下载文件名：优先 filename*=UTF-8''（中文名），回退 filename */
+export function fileNameFromDisposition(header: string | null, fallback = 'report.xlsx'): string {
+  if (!header) return fallback;
+  const star = header.match(/filename\*=(?:UTF-8'')?([^;]+)/i);
+  if (star) {
+    try { return decodeURIComponent(star[1].trim()); } catch { /* 非法编码时回退 */ }
+  }
+  const plain = header.match(/filename="?([^";]+)"?/i);
+  return plain?.[1] ?? fallback;
+}
+
+/** 下载导出文件：携带当前草稿 payload，保证导出的维度/指标/聚合与编辑器完全一致 */
+export async function exportDownload(defId: string, taskId: string, payload: unknown) {
+  const res = await fetch(`${BASE}/export/${taskId}/download`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ def_id: defId, payload }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null) as { error?: string } | null;
+    throw new ApiError(res.status, `${res.status} ${body?.error ?? res.statusText}`);
+  }
+  const filename = fileNameFromDisposition(res.headers.get('Content-Disposition'));
+  const blob = await res.blob();
+  return { blob, filename };
+}

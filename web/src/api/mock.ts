@@ -590,24 +590,38 @@ export const handlers = [
     HttpResponse.json({ id: 'task-1', state: 'done', progress: 1, updated_at: '2026-09-05T00:00:01Z' }),
   ),
 
+  http.post('*/v1/export/:taskId/download', async ({ request }) => {
+    const body = await request.json().catch(() => ({})) as { def_id?: string; payload?: Partial<typeof defaultDraftPayload> };
+    // 编辑器下载：按当前草稿 payload 生成（多维度/多指标/聚合即时生效），不依赖已保存缓存
+    return downloadXlsx(body.def_id ?? 'rpt_sales', body.payload);
+  }),
+
   http.get('*/v1/export/:taskId/download', async ({ request }) => {
-    // 导出下载：按最近保存的草稿配置动态生成真实 Excel（带表头样式/合并/数据条），不再返回 SPA 页面
+    // 兼容 GET（外部调用）：按最近保存的草稿配置生成
     const defId = new URL(request.url).searchParams.get('def_id') ?? 'rpt_sales';
-    const payload = draftCache.get(defId) ?? draftFor(defId);
-    const schema = buildMockSchema(payload);
-    const buf = await xlsxFromSchema(schema);
-    const reportName = (payload.name ?? 'report').replace(/[\\/"]/g, '_').trim() || 'report';
-    // Header 值必须 ASCII 合法：filename 用安全化名称，中文名经 filename*=UTF-8 传给现代浏览器
-    const asciiName = reportName.replace(/[^\x20-\x7E]/g, '_');
-    const disposition = `attachment; filename="${asciiName}.xlsx"; filename*=UTF-8''${encodeURIComponent(`${reportName}.xlsx`)}`;
-    return new HttpResponse(buf, {
-      headers: {
-        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': disposition,
-      },
-    });
+    return downloadXlsx(defId, {});
   }),
 ];
+
+/** 生成并返回 Excel 下载响应；payload 有内容时优先于已保存草稿 */
+async function downloadXlsx(
+  defId: string,
+  payload?: Partial<typeof defaultDraftPayload>,
+): Promise<HttpResponse<ArrayBuffer>> {
+  const src = payload && Object.keys(payload).length > 0 ? payload : (draftCache.get(defId) ?? draftFor(defId));
+  const schema = buildMockSchema(src);
+  const buf = await xlsxFromSchema(schema);
+  const reportName = (src.name ?? 'report').replace(/[\\/"]/g, '_').trim() || 'report';
+  // Header 值必须 ASCII 合法：filename 用安全化名称，中文名经 filename*=UTF-8 传给现代浏览器
+  const asciiName = reportName.replace(/[^\x20-\x7E]/g, '_');
+  const disposition = `attachment; filename="${asciiName}.xlsx"; filename*=UTF-8''${encodeURIComponent(`${reportName}.xlsx`)}`;
+  return new HttpResponse(buf, {
+    headers: {
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': disposition,
+    },
+  });
+}
 
 /**
  * schema → 真实 Excel 工作簿（.xlsx）字节流：

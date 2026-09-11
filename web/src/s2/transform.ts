@@ -268,8 +268,17 @@ export function buildPreview(
     },
   };
 
+  // valueInCols 必须显式开启：columns 为空时 S2 默认 false 会把指标当作行维度叶子节点
+  // （root[&]大区[&]amount），导致列区零节点、数据格不渲染，画布只剩"金额▼"/空白。
+  const dataCfg: S2DataConfig = {
+    data: records as unknown as RawData[],
+    fields,
+    meta,
+    valueInCols: true,
+  };
+
   return {
-    dataCfg: { data: records as unknown as RawData[], fields, meta },
+    dataCfg,
     // hierarchyType 供层级展示使用；指标列默认右对齐；条件格式映射为 S2 conditions；列宽据后端 width 填充
     options,
     records,

@@ -304,15 +304,24 @@ body {
   flex: 1; min-height: 0;
   display: flex; gap: var(--space-3);
 }
-/* 左配置轨（纸张浅色，滚动）——加宽，给配置留足空间 */
+/* 左配置轨（纸张浅色，内部滚动）——加宽，给配置留足空间 */
 .ate-rail {
   width: 420px; min-width: 380px;
+  height: 100%; min-height: 0;
   overflow-y: auto;
   display: flex; flex-direction: column; gap: var(--space-3);
   padding-right: 2px;
   scrollbar-width: thin;
   scrollbar-color: var(--paper-line) transparent;
 }
+.ate-rail::-webkit-scrollbar { width: 8px; }
+.ate-rail::-webkit-scrollbar-thumb { background: var(--paper-line); border-radius: 4px; }
+.ate-rail::-webkit-scrollbar-track { background: transparent; }
+/* 面板内小表格：列内容 nowrap，压缩列宽后仍超宽时在表格内横向滚动兜底，绝不撑破 rail 父容器 */
+.ate-rail .ant-table-wrapper { overflow-x: auto; overflow-y: hidden; }
+.ate-rail .ant-table { table-layout: auto; }
+.ate-rail .ant-table-tbody .ant-table-cell,
+.ate-rail .ant-table-thead .ant-table-cell { white-space: nowrap; padding: 3px 5px; }
 /* 统一面板：纸面卡 */
 .ate-panel.ant-card {
   background: var(--paper-card);

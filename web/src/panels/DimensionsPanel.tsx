@@ -90,7 +90,7 @@ export function DimensionsPanel() {
           key={v}
           aria-label={`显示名 ${r.field}`}
           defaultValue={v}
-          style={{ width: 92 }}
+          style={{ width: 56 }}
           onBlur={(e) => { if (e.target.value !== r.label) patchDim(r.field, { label: e.target.value }); }}
         />
       ),
@@ -98,18 +98,24 @@ export function DimensionsPanel() {
     {
       title: '字段',
       dataIndex: 'field',
-      render: (v: string) => <span className="mono" style={{ fontSize: 12, color: 'var(--ink-dim)' }}>{v}</span>,
+      render: (v: string) => (
+        <span
+          className="mono"
+          title={v}
+          style={{ fontSize: 11.5, color: 'var(--ink-dim)', display: 'inline-block', maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis', verticalAlign: 'middle' }}
+        >{v}</span>
+      ),
     },
     {
       title: '轴',
       dataIndex: 'axis',
-      width: 64,
+      width: 54,
       render: (v: string, r) => (
         <Select
           size="small"
           aria-label={`轴 ${r.field}`}
           value={v ?? 'row'}
-          style={{ width: 58 }}
+          style={{ width: 46 }}
           options={[
             { value: 'row', label: '行' },
             { value: 'col', label: '列' },
@@ -121,14 +127,14 @@ export function DimensionsPanel() {
     {
       title: '排序',
       dataIndex: 'sort',
-      width: 120,
+      width: 108,
       render: (v: DimensionDef['sort'] | undefined, r) => (
-        <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+        <span style={{ display: 'inline-flex', gap: 3, alignItems: 'center' }}>
           <Select
             size="small"
             aria-label={`排序依据 ${r.field}`}
             value={v?.by ?? 'sort_key'}
-            style={{ width: 76 }}
+            style={{ width: 62 }}
             options={[
               { value: 'sort_key', label: 'sort_key' },
               { value: 'value', label: '值' },
@@ -147,20 +153,20 @@ export function DimensionsPanel() {
     },
     {
       title: '操作',
-      width: 96,
+      width: 76,
       render: (_, r, i) => (
-        <span style={{ display: 'inline-flex', gap: 2 }}>
+        <span style={{ display: 'inline-flex', gap: 0 }}>
           <Tooltip title="上移">
             <Button type="text" size="small" aria-label={`上移 ${r.label}`} disabled={i === 0}
-              style={{ color: 'var(--ink-faint)' }} onClick={() => move(r.field, -1)}>↑</Button>
+              style={{ color: 'var(--ink-faint)', padding: '0 4px' }} onClick={() => move(r.field, -1)}>↑</Button>
           </Tooltip>
           <Tooltip title="下移">
             <Button type="text" size="small" aria-label={`下移 ${r.label}`} disabled={i === dims.length - 1}
-              style={{ color: 'var(--ink-faint)' }} onClick={() => move(r.field, 1)}>↓</Button>
+              style={{ color: 'var(--ink-faint)', padding: '0 4px' }} onClick={() => move(r.field, 1)}>↓</Button>
           </Tooltip>
           <Tooltip title="删除维度">
             <Button type="text" size="small" aria-label={`删除维度 ${r.label}`}
-              style={{ color: 'var(--ink-faint)' }} onClick={() => removeDim(r.field)}>×</Button>
+              style={{ color: 'var(--ink-faint)', padding: '0 4px' }} onClick={() => removeDim(r.field)}>×</Button>
           </Tooltip>
         </span>
       ),
