@@ -1,5 +1,5 @@
 import type {
-  ExportSubmitResult, ExplainResult, RenderRequest, RenderSchema, TaskStatus,
+  DataSourceInfo, DatasetInfo, ExportSubmitResult, ExplainResult, RenderRequest, RenderSchema, TaskStatus,
   TraceResult, VersionInfo,
 } from './types';
 
@@ -71,6 +71,14 @@ export function styleExplain(cellId: string, defId: string) {
 
 export function dataTrace(cellId: string, defId: string) {
   return req<TraceResult>(`/cells/${cellId}/data-trace?def_id=${encodeURIComponent(defId)}`);
+}
+
+export function fetchDataSources() {
+  return req<DataSourceInfo[]>('/datasources');
+}
+
+export function fetchDatasets() {
+  return req<DatasetInfo[]>('/datasets');
 }
 
 export function submitExport(body: { def_id: string; version?: number; idempotency_key?: string }) {

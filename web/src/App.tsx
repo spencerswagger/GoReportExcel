@@ -1,5 +1,6 @@
 import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom';
 import ReportList from './pages/ReportList';
+import Datasets from './pages/Datasets';
 import EditorLayout from './editor/EditorLayout';
 
 function AppShell() {
@@ -12,6 +13,7 @@ function AppShell() {
         </div>
         <nav className="ate-nav">
           <NavLink to="/" end className={({ isActive }) => (isActive ? 'active' : '')}>报表库</NavLink>
+          <NavLink to="/datasets" className={({ isActive }) => (isActive ? 'active' : '')}>数据管理</NavLink>
         </nav>
         <div className="ate-header-right">
           <span className="dot">●</span>
@@ -21,6 +23,7 @@ function AppShell() {
       <div className="ate-body">
         <Routes>
           <Route path="/" element={<ReportList />} />
+          <Route path="/datasets" element={<Datasets />} />
           <Route path="/editor/:id" element={<EditorLayout />} />
         </Routes>
       </div>

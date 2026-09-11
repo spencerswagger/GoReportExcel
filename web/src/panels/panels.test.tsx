@@ -141,3 +141,47 @@ test('PageSetupPanel shows orientation and toggles landscape', () => {
   expect(lo.print?.orientation).toBe('landscape');
   expect(useEditorStore.getState().saveState).toBe('dirty');
 });
+
+function draftWithChannel(): DraftShape {
+  const d = seededDraft();
+  (d.dataset as { fields: Array<{ key: string; type: string }> }).fields = [
+    ...(d.dataset as { fields: Array<{ key: string; type: string }> }).fields,
+    { key: 'channel', type: 'string' },
+  ];
+  return d;
+}
+
+test('DimensionsPanel adds dimension from dataset field pool and removes it', () => {
+  const s = useEditorStore.getState();
+  s.setDraft(draftWithChannel(), 2);
+  render(<DimensionsPanel />);
+  // 从字段池添加 channel
+  fireEvent.click(screen.getByRole('button', { name: /添加维度/ }));
+  fireEvent.click(screen.getByText('channel · string'));
+  let dims = (useEditorStore.getState().draft as DraftShape).dimensions as DimensionDef[];
+  expect(dims.map((d) => d.field)).toContain('channel');
+  expect(useEditorStore.getState().saveState).toBe('dirty');
+  // 已占用字段不再出现在池中 → 删除 channel 后重新可用
+  fireEvent.click(screen.getByLabelText('删除维度 channel'));
+  dims = (useEditorStore.getState().draft as DraftShape).dimensions as DimensionDef[];
+  expect(dims.map((d) => d.field)).not.toContain('channel');
+});
+
+test('MetricsPanel adds metric from field pool, removes and reorders it', () => {
+  const s = useEditorStore.getState();
+  s.setDraft(draftWithChannel(), 2);
+  render(<MetricsPanel />);
+  // 添加 channel 指标
+  fireEvent.click(screen.getByRole('button', { name: /添加指标/ }));
+  fireEvent.click(screen.getByText('channel · string'));
+  let metrics = (useEditorStore.getState().draft as DraftShape).metrics as MetricDef[];
+  expect(metrics.map((m) => m.field)).toEqual(['amount', 'channel']);
+  // 上移 channel → 与 amount 换位
+  fireEvent.click(screen.getByLabelText('上移 channel'));
+  metrics = (useEditorStore.getState().draft as DraftShape).metrics as MetricDef[];
+  expect(metrics.map((m) => m.field)).toEqual(['channel', 'amount']);
+  // 删除 channel
+  fireEvent.click(screen.getByLabelText('删除指标 channel'));
+  metrics = (useEditorStore.getState().draft as DraftShape).metrics as MetricDef[];
+  expect(metrics.map((m) => m.field)).not.toContain('channel');
+});

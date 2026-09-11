@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import EditorLayout from './EditorLayout';
 import { useEditorStore } from '../store/editor';
@@ -24,7 +24,7 @@ afterAll(() => {
   vi.restoreAllMocks();
 });
 
-test('loads draft and renders three columns', async () => {
+test('loads draft and renders config rail and canvas', async () => {
   render(
     <MemoryRouter initialEntries={['/editor/rpt_sales']}>
       <Routes>
@@ -37,9 +37,14 @@ test('loads draft and renders three columns', async () => {
   });
   expect(screen.getByText('维度与排序')).toBeTruthy();
   expect(screen.getByText('样式规则（图层）')).toBeTruthy();
-  expect(screen.getByText('检查器')).toBeTruthy();
+  // 检查器不再占据固定右列：未选中单元格时不渲染浮层
+  expect(screen.queryByText('检查器')).toBeNull();
   await waitFor(() => { expect(screen.getByTestId('preview-sheet-mock')).toBeTruthy(); });
-  expect(screen.getByText(/11 ROWS/)).toBeTruthy();
+  expect(screen.getByText(/ROWS/)).toBeTruthy();
+  // 选中单元格后，检查器以浮层形式出现
+  act(() => { useEditorStore.getState().selectCell('r2c0'); });
+  expect(screen.getByText('检查器')).toBeTruthy();
+  expect(screen.getByLabelText('关闭检查器')).toBeTruthy();
 });
 
 test('theme dropdown applies finance theme on select', async () => {

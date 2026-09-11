@@ -240,12 +240,22 @@ export default function EditorLayout() {
               )}
             </div>
           </div>
-        </section>
 
-        {/* 右：检查器 */}
-        <aside style={{ width: 286, minWidth: 286, overflowY: 'auto' }} aria-label="检查器">
-          <Inspector />
-        </aside>
+          {/* 选中单元格后悬浮展示的样式检查器（不再占据固定右列） */}
+          {selectedCell && (
+            <div className="ate-inspector-float" aria-label="检查器浮层">
+              <button
+                type="button"
+                className="ate-inspector-close"
+                aria-label="关闭检查器"
+                onClick={() => selectCell(null)}
+              >
+                ×
+              </button>
+              <Inspector />
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );

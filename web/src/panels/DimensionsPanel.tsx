@@ -1,11 +1,12 @@
-import { useCallback } from 'react';
-import { Button, Card, Input, Select, Switch, Typography } from 'antd';
+import { useCallback, useMemo } from 'react';
+import { Button, Card, Dropdown, Input, Select, Switch, Tooltip, Typography } from 'antd';
+import type { MenuProps } from 'antd';
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useEditorStore } from '../store/editor';
 import type { DraftShape } from '../store/editor';
-import type { DimensionDef } from '../store/types';
+import type { DimensionDef, MetricDef } from '../store/types';
 
 export function reorderDims(dims: DimensionDef[], activeId: string, overId: string): DimensionDef[] {
   const from = dims.findIndex((x) => x.field === activeId);
@@ -31,20 +32,32 @@ function SortableItem({ dim, index }: { dim: DimensionDef; index: number }) {
     });
   }, [checkpoint, mutateDraft, dim.field, index]);
 
+  const remove = useCallback(() => {
+    checkpoint(`删除维度 ${dim.field}`);
+    mutateDraft((d) => {
+      const draft = d as DraftShape;
+      draft.dimensions = (Array.isArray(draft.dimensions) ? (draft.dimensions as DimensionDef[]) : []).filter((x) => x.field !== dim.field);
+    });
+  }, [checkpoint, mutateDraft, dim.field]);
+
   return (
-    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
-      <span {...attributes} {...listeners} style={{ cursor: 'grab', display: 'inline-flex' }}>
+    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, display: 'flex', gap: 6, marginBottom: 8, alignItems: 'center' }}>
+      <span {...attributes} {...listeners} style={{ cursor: 'grab', display: 'inline-flex', flexShrink: 0 }}>
         <Typography.Text type="secondary">≣</Typography.Text>
       </span>
-      <Input style={{ width: 110 }} defaultValue={dim.label} onBlur={(e) => {
+      <Input style={{ width: 96 }} defaultValue={dim.label} onBlur={(e) => {
         if (e.target.value !== dim.label) update({ label: e.target.value });
       }} />
-      <Select style={{ width: 90 }} value={dim.sort?.by ?? 'sort_key'} onChange={(v) => update({ sort: { by: v, dir: dim.sort?.dir ?? 'asc' } })} options={[
+      <Select style={{ width: 78 }} value={dim.sort?.by ?? 'sort_key'} onChange={(v) => update({ sort: { by: v, dir: dim.sort?.dir ?? 'asc' } })} options={[
         { value: 'sort_key', label: 'sort_key' },
         { value: 'value', label: '值' },
       ]} />
       <Switch checked={dim.sort?.dir === 'desc'} checkedChildren="降" unCheckedChildren="升"
         onChange={(v) => update({ sort: { by: dim.sort?.by ?? 'sort_key', dir: v ? 'desc' : 'asc' } })} />
+      <Tooltip title="删除维度">
+        <Button type="text" size="small" aria-label={`删除维度 ${dim.label}`} style={{ color: 'var(--ink-faint)' }}
+          onClick={remove}>×</Button>
+      </Tooltip>
     </div>
   );
 }
@@ -56,6 +69,31 @@ export function DimensionsPanel() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const dims = Array.isArray((draft as DraftShape | null)?.dimensions) ? ((draft as DraftShape).dimensions as DimensionDef[]) : [];
+  const metrics = Array.isArray((draft as DraftShape | null)?.metrics) ? ((draft as DraftShape).metrics as MetricDef[]) : [];
+  const datasetFields = ((draft as DraftShape | null)?.dataset as { fields?: Array<{ key: string; label?: string; type: string }> } | undefined)?.fields;
+
+  // 字段池：数据集中未被维度/指标占用的字段
+  const used = useMemo(() => new Set([...dims.map((d) => d.field), ...metrics.map((m) => m.field)]), [dims, metrics]);
+  const available = useMemo(
+    () => (datasetFields ?? []).filter((f) => !used.has(f.key)),
+    [datasetFields, used],
+  );
+
+  const dimItems: MenuProps['items'] = available.map((f) => ({
+    key: f.key,
+    label: `${f.label ?? f.key} · ${f.type}`,
+  }));
+
+  const addDim = (field: string) => {
+    const f = (datasetFields ?? []).find((x) => x.key === field);
+    checkpoint(`添加维度 ${field}`);
+    mutateDraft((d) => {
+      const draft = d as DraftShape;
+      const dims = Array.isArray(draft.dimensions) ? (draft.dimensions as DimensionDef[]) : [];
+      if (dims.some((x) => x.field === field)) return;
+      draft.dimensions = [...dims, { field, label: f?.label ?? field, sort: { by: 'sort_key', dir: 'asc' } }];
+    });
+  };
 
   const onDragEnd = (e: DragEndEvent) => {
     const over = e.over;
@@ -76,7 +114,15 @@ export function DimensionsPanel() {
           {dims.map((dim, i) => <SortableItem key={dim.field} dim={dim} index={i} />)}
         </SortableContext>
       </DndContext>
-      <Button size="small" type="dashed" block>添加维度</Button>
+      <Dropdown
+        menu={{ items: dimItems, onClick: ({ key }) => addDim(String(key)) }}
+        trigger={['click']}
+        disabled={available.length === 0}
+      >
+        <Button size="small" type="dashed" block disabled={available.length === 0} aria-label="添加维度">
+          {available.length === 0 ? '无可用字段' : '＋ 添加维度'}
+        </Button>
+      </Dropdown>
     </Card>
   );
 }

@@ -69,6 +69,31 @@ export interface RenderSchema {
   conditional_formats?: CFInfo[];
 }
 
+export interface DataSourceInfo {
+  id: string;
+  name: string;
+  kind: 'csv' | 'db' | 'excel';
+  detail?: string;
+  tables?: string[];
+}
+
+export interface DatasetFieldInfo {
+  key: string;
+  type: 'string' | 'number' | 'date' | 'boolean';
+  label?: string;
+  sort_key?: string;
+}
+
+export interface DatasetInfo {
+  id: string;
+  name: string;
+  source_ref: string;
+  source_name?: string;
+  field_count: number;
+  fields: DatasetFieldInfo[];
+  updated_at?: string;
+}
+
 export interface VersionInfo {
   version: number;
   status: 'draft' | 'published';

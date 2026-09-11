@@ -304,9 +304,9 @@ body {
   flex: 1; min-height: 0;
   display: flex; gap: var(--space-3);
 }
-/* 左配置轨（纸张浅色，滚动） */
+/* 左配置轨（纸张浅色，滚动）——加宽，给配置留足空间 */
 .ate-rail {
-  width: 312px; min-width: 312px;
+  width: 420px; min-width: 380px;
   overflow-y: auto;
   display: flex; flex-direction: column; gap: var(--space-3);
   padding-right: 2px;
@@ -342,6 +342,7 @@ body {
   border: 1px solid var(--paper-line);
   border-radius: var(--radius-m);
   overflow: hidden;
+  position: relative;
 }
 .ate-canvas-bar {
   display: flex; align-items: center; gap: var(--space-3);
@@ -366,6 +367,37 @@ body {
   overflow: hidden;
   position: relative;
 }
+/* 选中单元格后悬浮的样式检查器（深墨浮层） */
+.ate-inspector-float {
+  position: absolute;
+  top: 52px; right: 14px;
+  width: 312px;
+  z-index: 40;
+  border-radius: var(--radius-m);
+  overflow: visible;
+  box-shadow: 0 24px 48px -16px rgba(20,16,8,.45), 0 4px 12px rgba(20,16,8,.18);
+  animation: ate-inspector-in .16s var(--ease-out);
+}
+@keyframes ate-inspector-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+.ate-inspector-close {
+  position: absolute;
+  top: -8px; right: -8px;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--chrome-line);
+  background: var(--chrome-2);
+  color: var(--chrome-text-dim);
+  font-size: 14px; line-height: 1;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,.25);
+  transition: color var(--dur-fast), background var(--dur-fast);
+  z-index: 2;
+}
+.ate-inspector-close:hover { color: var(--chrome-text); background: var(--chrome-1); }
 /* 纸张水印网格 */
 .ate-sheet-frame::before {
   content: '';
